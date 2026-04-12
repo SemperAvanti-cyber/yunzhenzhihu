@@ -1,0 +1,13 @@
+body {
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-family: Arial, sans-serif;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.page {
+  padding: 16px;
+}
