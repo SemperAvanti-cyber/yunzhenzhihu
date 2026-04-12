@@ -21,13 +21,28 @@ import ConsultationApproval from '../views/admin/ConsultationApproval.vue'
 import AuditLog from '../views/admin/AuditLog.vue'
 import SystemSecurity from '../views/admin/SystemSecurity.vue'
 
-import { doctorResearchProfile } from '../mock/doctor'
+function getAuthUser() {
+  const raw = window.localStorage.getItem('authUser')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/** 父级 meta（如 requiresAuth）在部分场景下不会出现在 to.meta，用 matched 最稳妥 */
+function matchedMeta(to, key) {
+  return to.matched.some((record) => record.meta?.[key] === true)
+}
+
+function roleGroupFromRoute(to) {
+  const rec = [...to.matched].reverse().find((r) => r.meta?.roleGroup)
+  return rec?.meta?.roleGroup
+}
 
 const routes = [
-  {
-    path: '/',
-    redirect: '/portal'
-  },
+  { path: '/', redirect: '/portal' },
   {
     path: '/portal',
     name: 'portal',
@@ -37,38 +52,14 @@ const routes = [
   {
     path: '/doctor',
     component: DoctorLayout,
+    meta: { requiresAuth: true, roleGroup: 'doctor' },
     redirect: '/doctor/workbench',
     children: [
-      {
-        path: 'workbench',
-        name: 'doctor-workbench',
-        component: DoctorWorkbench,
-        meta: { title: '工作台' }
-      },
-      {
-        path: 'diagnosis',
-        name: 'doctor-diagnosis',
-        component: AIDiagnosis,
-        meta: { title: 'AI辅助诊断' }
-      },
-      {
-        path: 'records',
-        name: 'doctor-records',
-        component: MyRecords,
-        meta: { title: '我的病例' }
-      },
-      {
-        path: 'referral',
-        name: 'doctor-referral',
-        component: ReferralCenter,
-        meta: { title: '分级诊疗' }
-      },
-      {
-        path: 'research',
-        name: 'doctor-research',
-        component: ResearchEntry,
-        meta: { title: '科研中心' }
-      },
+      { path: 'workbench', name: 'doctor-workbench', component: DoctorWorkbench, meta: { title: '工作台' } },
+      { path: 'diagnosis', name: 'doctor-diagnosis', component: AIDiagnosis, meta: { title: 'AI辅助诊断' } },
+      { path: 'records', name: 'doctor-records', component: MyRecords, meta: { title: '我的病例' } },
+      { path: 'referral', name: 'doctor-referral', component: ReferralCenter, meta: { title: '分级诊疗' } },
+      { path: 'research', name: 'doctor-research', component: ResearchEntry, meta: { title: '科研中心' } },
       {
         path: 'research/projects',
         name: 'doctor-research-projects',
@@ -98,44 +89,15 @@ const routes = [
   {
     path: '/admin',
     component: AdminLayout,
+    meta: { requiresAuth: true, roleGroup: 'admin' },
     redirect: '/admin/dashboard',
     children: [
-      {
-        path: 'dashboard',
-        name: 'admin-dashboard',
-        component: AdminDashboard,
-        meta: { title: '管理员首页' }
-      },
-      {
-        path: 'accounts',
-        name: 'admin-accounts',
-        component: AccountManage,
-        meta: { title: '账号管理' }
-      },
-      {
-        path: 'permissions',
-        name: 'admin-permissions',
-        component: PermissionApproval,
-        meta: { title: '项目合规与数据治理' }
-      },
-      {
-        path: 'consultation',
-        name: 'admin-consultation',
-        component: ConsultationApproval,
-        meta: { title: '跨院远程会诊审批' }
-      },
-      {
-        path: 'audit',
-        name: 'admin-audit',
-        component: AuditLog,
-        meta: { title: '审计日志' }
-      },
-      {
-        path: 'security',
-        name: 'admin-security',
-        component: SystemSecurity,
-        meta: { title: '系统安全' }
-      }
+      { path: 'dashboard', name: 'admin-dashboard', component: AdminDashboard, meta: { title: '管理员首页' } },
+      { path: 'accounts', name: 'admin-accounts', component: AccountManage, meta: { title: '账号管理' } },
+      { path: 'permissions', name: 'admin-permissions', component: PermissionApproval, meta: { title: '项目合规与数据治理' } },
+      { path: 'consultation', name: 'admin-consultation', component: ConsultationApproval, meta: { title: '跨院远程会诊审批' } },
+      { path: 'audit', name: 'admin-audit', component: AuditLog, meta: { title: '审计日志' } },
+      { path: 'security', name: 'admin-security', component: SystemSecurity, meta: { title: '系统安全' } }
     ]
   }
 ]
@@ -148,18 +110,27 @@ const router = createRouter({
   }
 })
 
-function hasResearchAccess() {
-  const storageStatus = window.localStorage.getItem('researchAccessStatus')
-
-  if (storageStatus === 'approved') return true
-  if (storageStatus === 'pending' || storageStatus === 'rejected') return false
-
-  return doctorResearchProfile.hasResearchAccess === true
-}
-
 router.beforeEach((to) => {
-  if (to.meta?.requiresResearchAccess && !hasResearchAccess()) {
-    return { name: 'doctor-research' }
+  const token = window.localStorage.getItem('token')
+  const user = getAuthUser()
+  const hasSession = Boolean(token && user)
+
+  if (matchedMeta(to, 'requiresAuth') && !hasSession) {
+    return { name: 'portal' }
+  }
+
+  const roleGroup = roleGroupFromRoute(to)
+  if (roleGroup === 'doctor' && user?.role !== 'DOCTOR') {
+    return { name: 'portal' }
+  }
+
+  if (roleGroup === 'admin' && user?.role === 'DOCTOR') {
+    return { name: 'portal' }
+  }
+
+  // 无科研权限访问科研子模块时回工作台（仍需已登录）
+  if (matchedMeta(to, 'requiresResearchAccess') && user && !user.hasResearchAccess) {
+    return { name: 'doctor-workbench' }
   }
 
   return true

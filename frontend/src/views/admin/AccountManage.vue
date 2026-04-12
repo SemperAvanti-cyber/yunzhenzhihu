@@ -3,130 +3,348 @@
     <div class="page-head">
       <div>
         <h1>账号管理</h1>
-        <div class="page-subtitle">管理本院医生账号、科室归属、启停状态与基础权限</div>
+        <div class="page-subtitle">管理本院医生账号、科室归属、启停状态与科研权限</div>
       </div>
 
       <div class="head-actions">
-        <button class="ghost-btn">批量导出</button>
-        <button class="primary-btn">新增账号</button>
+        <button class="ghost-btn" @click="fetchAccounts">刷新列表</button>
       </div>
     </div>
 
-    <section class="summary-grid">
-      <div class="summary-card">
-        <div class="summary-title">启用账号</div>
-        <div class="summary-value">86</div>
-        <div class="summary-note">当前正常使用</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">待审核账号</div>
-        <div class="summary-value">4</div>
-        <div class="summary-note">待完成开通确认</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">停用账号</div>
-        <div class="summary-value">7</div>
-        <div class="summary-note">历史留档保留</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">最近变更</div>
-        <div class="summary-value">今日 3 次</div>
-        <div class="summary-note">账号权限调整</div>
-      </div>
-    </section>
+    <div v-if="loading" class="page-tip">正在加载账号管理数据...</div>
+    <div v-else-if="error" class="page-tip error">{{ error }}</div>
 
-    <section class="panel-card">
-      <div class="panel-head">
-        <span>筛选条件</span>
-        <span class="panel-link">本院范围</span>
-      </div>
-
-      <div class="filter-grid">
-        <div class="filter-item">
-          <label>科室</label>
-          <div>皮肤科 / 病理科 / 教学中心</div>
+    <template v-else>
+      <section class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-title">启用账号</div>
+          <div class="summary-value">{{ board.summary.enabledCount }}</div>
+          <div class="summary-note">当前正常使用</div>
         </div>
-        <div class="filter-item">
-          <label>角色</label>
-          <div>普通医生 / 科主任 / 管理员</div>
+        <div class="summary-card">
+          <div class="summary-title">待审核账号</div>
+          <div class="summary-value">{{ board.summary.pendingCount }}</div>
+          <div class="summary-note">待完成开通确认</div>
         </div>
-        <div class="filter-item">
-          <label>状态</label>
-          <div>启用 / 停用 / 待审核</div>
+        <div class="summary-card">
+          <div class="summary-title">停用账号</div>
+          <div class="summary-value">{{ board.summary.disabledCount }}</div>
+          <div class="summary-note">停用后仍保留历史记录</div>
         </div>
-      </div>
-    </section>
+        <div class="summary-card">
+          <div class="summary-title">今日变更</div>
+          <div class="summary-value">{{ board.summary.todayChanges }}</div>
+          <div class="summary-note">账号与权限调整留痕</div>
+        </div>
+      </section>
 
-    <section class="panel-card">
-      <div class="panel-head">
-        <span>账号列表</span>
-        <span class="panel-link">增删改查</span>
-      </div>
-
-      <div class="table-wrap">
-        <div class="table-head">
-          <span>姓名</span>
-          <span>科室</span>
-          <span>角色</span>
-          <span>基础权限</span>
-          <span>状态</span>
-          <span>操作</span>
+      <section class="panel-card">
+        <div class="panel-head">
+          <span>筛选条件</span>
+          <span class="panel-link">医院管理员视角</span>
         </div>
 
-        <div v-for="item in accounts" :key="item.name" class="table-row">
-          <span>{{ item.name }}</span>
-          <span>{{ item.department }}</span>
-          <span>{{ item.role }}</span>
-          <span>{{ item.permission }}</span>
-          <span>
-            <em :class="['status-chip', item.statusClass]">{{ item.status }}</em>
-          </span>
-          <span class="action-text">{{ item.action }}</span>
+        <div class="filter-grid">
+          <div class="filter-item full">
+            <label>搜索</label>
+            <input
+                v-model="filters.keyword"
+                placeholder="搜索姓名 / 账号 / 邮箱"
+                @keyup.enter="applyFilters"
+            />
+          </div>
+
+          <div class="filter-item">
+            <label>科室</label>
+            <select v-model="filters.departmentId" @change="applyFilters">
+              <option value="">全部科室</option>
+              <option
+                  v-for="item in board.filters.departmentOptions"
+                  :key="item.value"
+                  :value="item.value"
+              >
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label>状态</label>
+            <select v-model="filters.status" @change="applyFilters">
+              <option
+                  v-for="item in board.filters.statusOptions"
+                  :key="item.value"
+                  :value="item.value"
+              >
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="filter-action">
+            <button class="primary-btn" @click="applyFilters">应用筛选</button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section class="content-grid">
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>账号列表</span>
+            <span class="panel-link">{{ board.list.length }} 条记录</span>
+          </div>
+
+          <div class="table-wrap">
+            <div class="table-head">
+              <span>姓名</span>
+              <span>科室</span>
+              <span>职称</span>
+              <span>角色</span>
+              <span>科研权限</span>
+              <span>状态</span>
+              <span>最近登录</span>
+            </div>
+
+            <div
+                v-for="item in board.list"
+                :key="item.id"
+                class="table-row"
+                :class="{ active: selected?.id === item.id }"
+                @click="selectUser(item.id)"
+            >
+              <span>{{ item.realName }}</span>
+              <span>{{ item.department }}</span>
+              <span>{{ item.title }}</span>
+              <span>{{ item.roleLabel }}</span>
+              <span>{{ item.hasResearchAccess ? '已开通' : '未开通' }}</span>
+              <span>
+                <em :class="['status-chip', item.statusClass]">{{ item.status }}</em>
+              </span>
+              <span>{{ item.lastLoginAt }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>账号详情</span>
+            <span class="panel-link">{{ selected?.realName || '未选择' }}</span>
+          </div>
+
+          <template v-if="selected">
+            <div class="detail-list">
+              <div class="detail-item">
+                <label>姓名</label>
+                <div>{{ selected.realName }}</div>
+              </div>
+              <div class="detail-item">
+                <label>账号</label>
+                <div>{{ selected.account }}</div>
+              </div>
+              <div class="detail-item">
+                <label>邮箱</label>
+                <div>{{ selected.email }}</div>
+              </div>
+              <div class="detail-item">
+                <label>医院</label>
+                <div>{{ selected.hospital }}</div>
+              </div>
+              <div class="detail-item">
+                <label>科室</label>
+                <div>{{ selected.department }}</div>
+              </div>
+              <div class="detail-item">
+                <label>职称</label>
+                <div>{{ selected.title }}</div>
+              </div>
+              <div class="detail-item">
+                <label>账号状态</label>
+                <div>{{ selected.status }}</div>
+              </div>
+              <div class="detail-item">
+                <label>科研权限</label>
+                <div>{{ selected.hasResearchAccess ? '已开通' : '未开通' }}</div>
+              </div>
+            </div>
+
+            <div class="action-grid">
+              <button
+                  class="primary-btn"
+                  @click="toggleStatus"
+                  :disabled="submitting"
+              >
+                {{ selected.statusRaw === 'DISABLED' ? '启用账号' : '停用账号' }}
+              </button>
+
+              <button
+                  class="ghost-btn"
+                  @click="toggleResearchAccess"
+                  :disabled="submitting"
+              >
+                {{ selected.hasResearchAccess ? '关闭科研权限' : '开通科研权限' }}
+              </button>
+            </div>
+
+            <div class="log-section">
+              <div class="log-title">最近操作记录</div>
+              <div v-if="selected.recentActions.length" class="log-list">
+                <div
+                    v-for="item in selected.recentActions"
+                    :key="item.id"
+                    class="log-item"
+                >
+                  <div class="log-type">{{ item.actionType }}</div>
+                  <div class="log-desc">{{ item.detail }}</div>
+                  <div class="log-time">{{ item.createdAt }}</div>
+                </div>
+              </div>
+              <div v-else class="empty-text">暂无最近操作记录</div>
+            </div>
+          </template>
+
+          <div v-else class="empty-text">请选择左侧账号查看详情</div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-const accounts = [
-  {
-    name: '张医生',
-    department: '皮肤科',
-    role: '普通医生',
-    permission: '临床中心',
-    status: '启用',
-    statusClass: 'success',
-    action: '编辑 / 停用 / 重置密码'
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  getAdminAccountsApi,
+  toggleResearchAccessApi,
+  updateAccountStatusApi
+} from '../../api/admin'
+
+const route = useRoute()
+const router = useRouter()
+
+const loading = ref(false)
+const submitting = ref(false)
+const error = ref('')
+const selected = ref(null)
+
+const board = ref({
+  summary: {
+    enabledCount: 0,
+    pendingCount: 0,
+    disabledCount: 0,
+    todayChanges: 0
   },
-  {
-    name: '李医生',
-    department: '皮肤科',
-    role: '科主任',
-    permission: '临床中心 + 科研中心',
-    status: '启用',
-    statusClass: 'success',
-    action: '编辑 / 调整权限 / 重置密码'
+  filters: {
+    keyword: '',
+    currentDepartmentId: '',
+    currentStatus: 'ALL',
+    departmentOptions: [],
+    statusOptions: []
   },
-  {
-    name: '王医生',
-    department: '病理科',
-    role: '普通医生',
-    permission: '临床中心',
-    status: '待审核',
-    statusClass: 'warning',
-    action: '审核 / 退回 / 编辑'
-  },
-  {
-    name: '周医生',
-    department: '教学中心',
-    role: '管理员',
-    permission: '跨院协同管理',
-    status: '停用',
-    statusClass: 'danger',
-    action: '查看记录 / 重新启用'
+  list: [],
+  selected: null
+})
+
+const filters = reactive({
+  keyword: '',
+  departmentId: '',
+  status: 'ALL'
+})
+
+async function fetchAccounts() {
+  try {
+    loading.value = true
+    error.value = ''
+
+    const data = await getAdminAccountsApi({
+      keyword: filters.keyword,
+      departmentId: filters.departmentId,
+      status: filters.status,
+      userId: route.query.userId || ''
+    })
+
+    board.value = data
+    selected.value = data.selected || null
+
+    if (!filters.status) {
+      filters.status = data.filters.currentStatus || 'ALL'
+    }
+  } catch (err) {
+    error.value = err.message || '账号管理页加载失败'
+  } finally {
+    loading.value = false
   }
-]
+}
+
+async function applyFilters() {
+  await router.replace({
+    path: '/admin/accounts',
+    query: {
+      scope: route.query.scope || 'hospital',
+      userId: route.query.userId || '',
+      keyword: filters.keyword || '',
+      departmentId: filters.departmentId || '',
+      status: filters.status || 'ALL'
+    }
+  })
+
+  await fetchAccounts()
+}
+
+async function selectUser(userId) {
+  await router.replace({
+    path: '/admin/accounts',
+    query: {
+      scope: route.query.scope || 'hospital',
+      keyword: filters.keyword || '',
+      departmentId: filters.departmentId || '',
+      status: filters.status || 'ALL',
+      userId
+    }
+  })
+
+  await fetchAccounts()
+}
+
+async function toggleStatus() {
+  if (!selected.value) return
+
+  const nextStatus =
+      selected.value.statusRaw === 'DISABLED' ? 'ENABLED' : 'DISABLED'
+
+  try {
+    submitting.value = true
+    await updateAccountStatusApi(selected.value.id, nextStatus)
+    await fetchAccounts()
+  } catch (err) {
+    window.alert(err.message || '更新账号状态失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function toggleResearchAccess() {
+  if (!selected.value) return
+
+  try {
+    submitting.value = true
+    await toggleResearchAccessApi(
+        selected.value.id,
+        !selected.value.hasResearchAccess
+    )
+    await fetchAccounts()
+  } catch (err) {
+    window.alert(err.message || '更新科研权限失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+onMounted(() => {
+  filters.keyword = String(route.query.keyword || '')
+  filters.departmentId = String(route.query.departmentId || '')
+  filters.status = String(route.query.status || 'ALL')
+  fetchAccounts()
+})
 </script>
 
 <style scoped>
@@ -138,7 +356,7 @@ const accounts = [
 
 .page-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
@@ -152,7 +370,11 @@ const accounts = [
 
 .page-subtitle,
 .summary-note,
-.panel-link {
+.panel-link,
+.page-tip,
+.empty-text,
+.log-desc,
+.log-time {
   font-size: 12px;
   line-height: 1.8;
   color: #7892b0;
@@ -162,7 +384,12 @@ const accounts = [
   margin-top: 6px;
 }
 
-.head-actions {
+.page-tip.error {
+  color: #d83b3b;
+}
+
+.head-actions,
+.action-grid {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
@@ -192,7 +419,8 @@ const accounts = [
 }
 
 .summary-grid,
-.filter-grid {
+.filter-grid,
+.content-grid {
   display: grid;
   gap: 14px;
 }
@@ -202,12 +430,19 @@ const accounts = [
 }
 
 .filter-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1.2fr 1fr 1fr auto;
+  align-items: end;
+}
+
+.content-grid {
+  grid-template-columns: 1.18fr 0.82fr;
 }
 
 .summary-card,
 .panel-card,
-.filter-item {
+.filter-item,
+.detail-item,
+.log-item {
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid #dce8f4;
   border-radius: 22px;
@@ -250,24 +485,32 @@ const accounts = [
   color: #17385f;
 }
 
-.filter-item {
-  padding: 16px;
-  background: #f9fcff;
-  border: 1px solid #e3edf7;
-  box-shadow: none;
+.filter-item.full {
+  grid-column: auto;
 }
 
-.filter-item label {
+.filter-item label,
+.detail-item label {
   display: block;
   font-size: 12px;
   color: #7a93af;
   margin-bottom: 8px;
 }
 
-.filter-item div {
+.filter-item input,
+.filter-item select {
+  width: 100%;
+  border: 1px solid #d8e5f2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 14px;
   font-size: 14px;
   color: #1d466f;
-  line-height: 1.7;
+  outline: none;
+}
+
+.filter-action {
+  display: flex;
 }
 
 .table-wrap {
@@ -279,7 +522,7 @@ const accounts = [
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1.3fr 0.9fr 1.4fr;
+  grid-template-columns: 1fr 1fr 0.9fr 0.8fr 0.9fr 0.8fr 0.9fr;
   gap: 12px;
   padding: 14px 16px;
   border-radius: 16px;
@@ -298,6 +541,12 @@ const accounts = [
   border: 1px solid #e3edf7;
   font-size: 13px;
   color: #365a7f;
+  cursor: pointer;
+}
+
+.table-row.active {
+  background: #edf6ff;
+  border-color: #bfd8f8;
 }
 
 .status-chip {
@@ -324,9 +573,36 @@ const accounts = [
   color: #d83b3b;
 }
 
-.action-text {
-  color: #1d4f91;
-  font-weight: 700;
+.detail-list,
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-item,
+.log-item {
+  padding: 14px;
+  background: #f9fcff;
+  border: 1px solid #e3edf7;
+  box-shadow: none;
+}
+
+.detail-item div {
+  font-size: 14px;
+  color: #1d466f;
+  line-height: 1.7;
+}
+
+.log-section {
+  margin-top: 18px;
+}
+
+.log-title,
+.log-type {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1d466f;
 }
 
 @media (max-width: 1280px) {
@@ -337,9 +613,14 @@ const accounts = [
 
   .summary-grid,
   .filter-grid,
+  .content-grid,
   .table-head,
   .table-row {
     grid-template-columns: 1fr;
+  }
+
+  .filter-action {
+    width: 100%;
   }
 }
 </style>

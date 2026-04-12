@@ -1,146 +1,292 @@
 <template>
-  <div class="account-page">
+  <div class="audit-page">
     <div class="page-head">
       <div>
-        <h1>账号管理</h1>
-        <div class="page-subtitle">管理本院医生账号、科室归属、启停状态与基础权限</div>
-      </div>
-
-      <div class="head-actions">
-        <button class="ghost-btn">批量导出</button>
-        <button class="primary-btn">新增账号</button>
+        <h1>审计日志</h1>
+        <div class="page-subtitle">检索敏感行为、追踪导出链路、查看高危操作详情</div>
       </div>
     </div>
 
-    <section class="summary-grid">
-      <div class="summary-card">
-        <div class="summary-title">启用账号</div>
-        <div class="summary-value">86</div>
-        <div class="summary-note">当前正常使用</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">待审核账号</div>
-        <div class="summary-value">4</div>
-        <div class="summary-note">待完成开通确认</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">停用账号</div>
-        <div class="summary-value">7</div>
-        <div class="summary-note">历史留档保留</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">最近变更</div>
-        <div class="summary-value">今日 3 次</div>
-        <div class="summary-note">账号权限调整</div>
-      </div>
-    </section>
+    <div v-if="loading" class="page-tip">正在加载审计日志...</div>
+    <div v-else-if="error" class="page-tip error">{{ error }}</div>
 
-    <section class="panel-card">
-      <div class="panel-head">
-        <span>筛选条件</span>
-        <span class="panel-link">本院范围</span>
-      </div>
-
-      <div class="filter-grid">
-        <div class="filter-item">
-          <label>科室</label>
-          <div>皮肤科 / 病理科 / 教学中心</div>
+    <template v-else>
+      <section class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-title">今日审计记录</div>
+          <div class="summary-value">{{ board.summary.todayCount }}</div>
+          <div class="summary-note">平台关键行为留痕</div>
         </div>
-        <div class="filter-item">
-          <label>角色</label>
-          <div>普通医生 / 科主任 / 管理员</div>
+        <div class="summary-card">
+          <div class="summary-title">高危操作</div>
+          <div class="summary-value">{{ board.summary.highRiskCount }}</div>
+          <div class="summary-note">建议优先复核</div>
         </div>
-        <div class="filter-item">
-          <label>状态</label>
-          <div>启用 / 停用 / 待审核</div>
+        <div class="summary-card">
+          <div class="summary-title">导出追溯</div>
+          <div class="summary-value">{{ board.summary.exportTraceCount }}</div>
+          <div class="summary-note">可追踪导出链路</div>
         </div>
-      </div>
-    </section>
+        <div class="summary-card">
+          <div class="summary-title">今日操作人</div>
+          <div class="summary-value">{{ board.summary.uniqueActorCount }}</div>
+          <div class="summary-note">唯一操作主体数量</div>
+        </div>
+      </section>
 
-    <section class="panel-card">
-      <div class="panel-head">
-        <span>账号列表</span>
-        <span class="panel-link">增删改查</span>
-      </div>
-
-      <div class="table-wrap">
-        <div class="table-head">
-          <span>姓名</span>
-          <span>科室</span>
-          <span>角色</span>
-          <span>基础权限</span>
-          <span>状态</span>
-          <span>操作</span>
+      <section class="panel-card">
+        <div class="panel-head">
+          <span>筛选条件</span>
+          <span class="panel-link">安全审计管理员视角</span>
         </div>
 
-        <div v-for="item in accounts" :key="item.name" class="table-row">
-          <span>{{ item.name }}</span>
-          <span>{{ item.department }}</span>
-          <span>{{ item.role }}</span>
-          <span>{{ item.permission }}</span>
-          <span>
-            <em :class="['status-chip', item.statusClass]">{{ item.status }}</em>
-          </span>
-          <span class="action-text">{{ item.action }}</span>
+        <div class="filter-grid">
+          <div class="filter-item full">
+            <label>关键词</label>
+            <input
+                v-model="filters.keyword"
+                placeholder="搜索操作人 / 动作 / 目标 / 详情"
+                @keyup.enter="applyFilters"
+            />
+          </div>
+
+          <div class="filter-item">
+            <label>动作类型</label>
+            <select v-model="filters.actionType" @change="applyFilters">
+              <option
+                  v-for="item in board.filters.actionTypeOptions"
+                  :key="item.value"
+                  :value="item.value"
+              >
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label>风险等级</label>
+            <select v-model="filters.riskLevel" @change="applyFilters">
+              <option
+                  v-for="item in board.filters.riskOptions"
+                  :key="item.value"
+                  :value="item.value"
+              >
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="filter-action">
+            <button class="primary-btn" @click="applyFilters">应用筛选</button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section class="content-grid">
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>日志列表</span>
+            <span class="panel-link">{{ board.list.length }} 条</span>
+          </div>
+
+          <div class="table-wrap">
+            <div class="table-head">
+              <span>操作人</span>
+              <span>动作</span>
+              <span>目标类型</span>
+              <span>目标标识</span>
+              <span>风险</span>
+              <span>日期</span>
+            </div>
+
+            <div
+                v-for="item in board.list"
+                :key="item.id"
+                class="table-row"
+                :class="{ active: selected?.id === item.id }"
+                @click="selectLog(item.id)"
+            >
+              <span>{{ item.actorName }}</span>
+              <span>{{ item.actionType }}</span>
+              <span>{{ item.targetType }}</span>
+              <span>{{ item.targetId }}</span>
+              <span>
+                <em :class="['risk-chip', item.riskClass]">{{ item.riskLevel }}</em>
+              </span>
+              <span>{{ item.createdAt }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>日志详情</span>
+            <span class="panel-link">{{ selected?.actionType || '未选择' }}</span>
+          </div>
+
+          <template v-if="selected">
+            <div class="detail-list">
+              <div class="detail-item">
+                <label>操作人</label>
+                <div>{{ selected.actorName }}</div>
+              </div>
+              <div class="detail-item">
+                <label>角色</label>
+                <div>{{ selected.actorRole }}</div>
+              </div>
+              <div class="detail-item">
+                <label>动作类型</label>
+                <div>{{ selected.actionType }}</div>
+              </div>
+              <div class="detail-item">
+                <label>风险等级</label>
+                <div>{{ selected.riskLevel }}</div>
+              </div>
+              <div class="detail-item">
+                <label>目标类型</label>
+                <div>{{ selected.targetType }}</div>
+              </div>
+              <div class="detail-item">
+                <label>目标标识</label>
+                <div>{{ selected.targetId }}</div>
+              </div>
+              <div class="detail-item">
+                <label>IP 地址</label>
+                <div>{{ selected.ipAddress }}</div>
+              </div>
+              <div class="detail-item">
+                <label>日期</label>
+                <div>{{ selected.createdAt }}</div>
+              </div>
+              <div class="detail-item full">
+                <label>操作详情</label>
+                <div>{{ selected.detail }}</div>
+              </div>
+            </div>
+
+            <div class="history-box">
+              <div class="history-title">同一操作人最近行为</div>
+              <div v-if="selected.relatedLogs.length" class="history-list">
+                <div
+                    v-for="item in selected.relatedLogs"
+                    :key="item.id"
+                    class="history-item"
+                >
+                  <div class="history-action">{{ item.actionType }}</div>
+                  <div class="history-desc">{{ item.detail }}</div>
+                  <div class="history-time">{{ item.createdAt }}</div>
+                </div>
+              </div>
+              <div v-else class="empty-text">暂无相关历史行为</div>
+            </div>
+          </template>
+
+          <div v-else class="empty-text">请选择左侧日志查看详情</div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-const accounts = [
-  {
-    name: '张医生',
-    department: '皮肤科',
-    role: '普通医生',
-    permission: '临床中心',
-    status: '启用',
-    statusClass: 'success',
-    action: '编辑 / 停用 / 重置密码'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getAuditLogBoardApi } from '../../api/admin'
+
+const route = useRoute()
+const router = useRouter()
+
+const loading = ref(false)
+const error = ref('')
+
+const board = ref({
+  summary: {
+    todayCount: 0,
+    highRiskCount: 0,
+    exportTraceCount: 0,
+    uniqueActorCount: 0
   },
-  {
-    name: '李医生',
-    department: '皮肤科',
-    role: '科主任',
-    permission: '临床中心 + 科研中心',
-    status: '启用',
-    statusClass: 'success',
-    action: '编辑 / 调整权限 / 重置密码'
+  filters: {
+    keyword: '',
+    currentActionType: 'ALL',
+    currentRiskLevel: 'ALL',
+    actionTypeOptions: [],
+    riskOptions: []
   },
-  {
-    name: '王医生',
-    department: '病理科',
-    role: '普通医生',
-    permission: '临床中心',
-    status: '待审核',
-    statusClass: 'warning',
-    action: '审核 / 退回 / 编辑'
-  },
-  {
-    name: '周医生',
-    department: '教学中心',
-    role: '管理员',
-    permission: '跨院协同管理',
-    status: '停用',
-    statusClass: 'danger',
-    action: '查看记录 / 重新启用'
+  list: [],
+  selected: null
+})
+
+const selected = ref(null)
+
+const filters = ref({
+  keyword: '',
+  actionType: 'ALL',
+  riskLevel: 'ALL'
+})
+
+async function fetchBoard() {
+  try {
+    loading.value = true
+    error.value = ''
+
+    const data = await getAuditLogBoardApi({
+      logId: route.query.logId || '',
+      keyword: filters.value.keyword,
+      actionType: filters.value.actionType,
+      riskLevel: filters.value.riskLevel
+    })
+
+    board.value = data
+    selected.value = data.selected || null
+  } catch (err) {
+    error.value = err.message || '审计日志页加载失败'
+  } finally {
+    loading.value = false
   }
-]
+}
+
+async function applyFilters() {
+  await router.replace({
+    path: '/admin/audit',
+    query: {
+      scope: 'security',
+      logId: route.query.logId || '',
+      keyword: filters.value.keyword || '',
+      actionType: filters.value.actionType,
+      riskLevel: filters.value.riskLevel
+    }
+  })
+  await fetchBoard()
+}
+
+async function selectLog(id) {
+  await router.replace({
+    path: '/admin/audit',
+    query: {
+      scope: 'security',
+      logId: id,
+      keyword: filters.value.keyword || '',
+      actionType: filters.value.actionType,
+      riskLevel: filters.value.riskLevel
+    }
+  })
+  await fetchBoard()
+}
+
+onMounted(() => {
+  filters.value.keyword = String(route.query.keyword || '')
+  filters.value.actionType = String(route.query.actionType || 'ALL')
+  filters.value.riskLevel = String(route.query.riskLevel || 'ALL')
+  fetchBoard()
+})
 </script>
 
 <style scoped>
-.account-page {
+.audit-page {
   display: flex;
   flex-direction: column;
   gap: 18px;
-}
-
-.page-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
 }
 
 .page-head h1 {
@@ -152,7 +298,11 @@ const accounts = [
 
 .page-subtitle,
 .summary-note,
-.panel-link {
+.panel-link,
+.page-tip,
+.empty-text,
+.history-desc,
+.history-time {
   font-size: 12px;
   line-height: 1.8;
   color: #7892b0;
@@ -162,37 +312,13 @@ const accounts = [
   margin-top: 6px;
 }
 
-.head-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.primary-btn,
-.ghost-btn {
-  height: 42px;
-  padding: 0 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.primary-btn {
-  border: none;
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-}
-
-.ghost-btn {
-  border: 1px solid #d8e5f2;
-  background: #fff;
-  color: #365a7f;
+.page-tip.error {
+  color: #d83b3b;
 }
 
 .summary-grid,
-.filter-grid {
+.filter-grid,
+.content-grid {
   display: grid;
   gap: 14px;
 }
@@ -202,12 +328,18 @@ const accounts = [
 }
 
 .filter-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1.2fr 1fr 1fr auto;
+  align-items: end;
+}
+
+.content-grid {
+  grid-template-columns: 1.18fr 0.82fr;
 }
 
 .summary-card,
 .panel-card,
-.filter-item {
+.detail-item,
+.history-item {
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid #dce8f4;
   border-radius: 22px;
@@ -250,24 +382,40 @@ const accounts = [
   color: #17385f;
 }
 
-.filter-item {
-  padding: 16px;
-  background: #f9fcff;
-  border: 1px solid #e3edf7;
-  box-shadow: none;
-}
-
-.filter-item label {
+.filter-item label,
+.detail-item label {
   display: block;
   font-size: 12px;
   color: #7a93af;
   margin-bottom: 8px;
 }
 
-.filter-item div {
+.filter-item input,
+.filter-item select {
+  width: 100%;
+  border: 1px solid #d8e5f2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 14px;
   font-size: 14px;
   color: #1d466f;
-  line-height: 1.7;
+  outline: none;
+}
+
+.filter-action {
+  display: flex;
+}
+
+.primary-btn {
+  height: 42px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .table-wrap {
@@ -279,7 +427,7 @@ const accounts = [
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1.3fr 0.9fr 1.4fr;
+  grid-template-columns: 0.9fr 1.1fr 0.9fr 1fr 0.8fr 0.8fr;
   gap: 12px;
   padding: 14px 16px;
   border-radius: 16px;
@@ -298,9 +446,15 @@ const accounts = [
   border: 1px solid #e3edf7;
   font-size: 13px;
   color: #365a7f;
+  cursor: pointer;
 }
 
-.status-chip {
+.table-row.active {
+  background: #edf6ff;
+  border-color: #bfd8f8;
+}
+
+.risk-chip {
   display: inline-flex;
   padding: 4px 10px;
   border-radius: 999px;
@@ -309,37 +463,68 @@ const accounts = [
   white-space: nowrap;
 }
 
-.status-chip.success {
-  background: #ecfbf5;
-  color: #14906a;
+.risk-chip.info {
+  background: #edf6ff;
+  color: #2a70b8;
 }
 
-.status-chip.warning {
+.risk-chip.warning {
   background: #fff5df;
   color: #c98912;
 }
 
-.status-chip.danger {
+.risk-chip.danger {
   background: #feecec;
   color: #d83b3b;
 }
 
-.action-text {
-  color: #1d4f91;
-  font-weight: 700;
+.detail-list,
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-item,
+.history-item {
+  padding: 14px;
+  background: #f9fcff;
+  border: 1px solid #e3edf7;
+  box-shadow: none;
+}
+
+.detail-item.full {
+  grid-column: 1 / -1;
+}
+
+.detail-item div {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #1d466f;
+}
+
+.history-box {
+  margin-top: 16px;
+}
+
+.history-title,
+.history-action {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1d466f;
 }
 
 @media (max-width: 1280px) {
-  .page-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .summary-grid,
   .filter-grid,
+  .content-grid,
   .table-head,
   .table-row {
     grid-template-columns: 1fr;
+  }
+
+  .filter-action {
+    width: 100%;
   }
 }
 </style>

@@ -1,0 +1,503 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  DOCTOR
+  HOSPITAL_ADMIN
+  RESEARCH_ADMIN
+  SECURITY_ADMIN
+}
+
+enum CaseStatus {
+  PENDING_REVIEW
+  IN_TREATMENT
+  REFERRED
+  CLOSED
+}
+
+enum ReferralType {
+  INTERNAL_CONSULTATION
+  REFERRAL
+  REMOTE_CONSULTATION
+}
+
+enum ReferralStatus {
+  PENDING
+  IN_PROGRESS
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
+
+enum ProjectRole {
+  PI
+  MEMBER
+  COLLABORATOR
+}
+
+enum ProjectStatus {
+  ACTIVE
+  DELAYED
+  COMPLETED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+enum ImageAccessLevel {
+  CLINICAL_RAW
+  CONSULT_COPY
+  RESEARCH_ANON
+}
+
+enum ApprovalType {
+  PROJECT_REGISTRATION
+  EXPORT_REQUEST
+  CONSULTATION_REQUEST
+  ROLE_CHANGE
+  ANONYMIZATION_QC
+}
+
+enum ApprovalStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  RETURNED
+  REJECTED
+}
+
+enum AlertLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  IGNORED
+}
+
+enum BackupType {
+  AUTO
+  MANUAL
+  RESTORE_POINT
+}
+
+enum BackupStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum LoginResult {
+  SUCCESS
+  FAILED
+  LOCKED
+}
+
+enum ImageType {
+  CLINICAL_PHOTO
+  DERMOSCOPY
+  PATHOLOGY
+  FOLLOW_UP
+}
+
+enum ExperimentStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AccountStatus {
+  ENABLED
+  PENDING
+  DISABLED
+}
+
+model Hospital {
+  id          Int          @id @default(autoincrement())
+  name        String       @db.VarChar(120)
+  code        String       @unique @db.VarChar(40)
+  level       String?      @db.VarChar(40)
+  address     String?      @db.VarChar(255)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  departments Department[]
+  users       User[]
+  referralsFrom Referral[] @relation("ReferralFromHospital")
+  referralsTo   Referral[] @relation("ReferralToHospital")
+}
+
+model Department {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(80)
+  code        String    @unique @db.VarChar(40)
+  hospitalId  Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  hospital    Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  users       User[]
+
+  @@index([hospitalId])
+}
+
+model User {
+  id                Int          @id @default(autoincrement())
+  username          String       @unique @db.VarChar(80)
+  email             String?      @unique @db.VarChar(120)
+  passwordHash      String       @db.VarChar(255)
+  realName          String       @db.VarChar(80)
+  role              UserRole
+  title             String?      @db.VarChar(80)
+  phone             String?      @db.VarChar(30)
+  hospitalId        Int
+  departmentId      Int?
+  isActive          Boolean      @default(true)
+  hasResearchAccess Boolean      @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  hospital          Hospital     @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  department        Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  cases             MedicalCase[]
+  diagnoses         Diagnosis[]
+  projectMemberships ProjectMember[]
+  assignedTasks     ResearchTask[] @relation("TaskAssignee")
+  createdTasks      ResearchTask[] @relation("TaskAssigner")
+  approvalsApplied  ApprovalRecord[] @relation("ApprovalApplicant")
+  approvalsReviewed ApprovalRecord[] @relation("ApprovalReviewer")
+  auditLogs         AuditLog[]
+  loginLogs         LoginLog[]
+  experimentsCreated ExperimentRun[] @relation("ExperimentCreator")
+  accountStatus     AccountStatus @default(ENABLED)
+
+  @@index([hospitalId])
+  @@index([departmentId])
+  @@index([role])
+}
+
+model Patient {
+  id          Int       @id @default(autoincrement())
+  patientCode String    @unique @db.VarChar(40)
+  name        String    @db.VarChar(80)
+  gender      String?   @db.VarChar(20)
+  /// 年龄（展示用）；与 birthDate 可并存
+  age         Int?
+  birthDate   DateTime?
+  /// 证件号；物理列仍为 identityNo，避免迁移丢历史数据
+  idCard      String?   @map("identityNo") @db.VarChar(50)
+  phone       String?   @db.VarChar(30)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  medicalCases MedicalCase[]
+}
+
+model MedicalCase {
+  id               Int        @id @default(autoincrement())
+  caseCode         String     @unique @db.VarChar(50)
+  patientId        Int
+  doctorId         Int
+  chiefComplaint   String?    @db.VarChar(255)
+  finalConclusion  String?    @db.Text
+  status           CaseStatus @default(PENDING_REVIEW)
+  riskLevel        Int?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  patient    Patient        @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor     User           @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  images     MedicalImage[]
+  aiAnalyses AIAnalysis[]
+  diagnoses  Diagnosis[]
+  referrals  Referral[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+}
+
+model MedicalImage {
+  id          Int              @id @default(autoincrement())
+  imageCode   String           @unique @db.VarChar(50)
+  caseId      Int
+  imageUrl    String           @db.VarChar(255)
+  /// 取值见 ImageType 枚举（与 CLINICAL_PHOTO / DERMOSCOPY 等一致）
+  type        ImageType
+  bodyPart    String?          @db.VarChar(80)
+  deviceName  String?          @db.VarChar(80)
+  capturedAt  DateTime?
+  capturedBy  String?          @db.VarChar(80)
+  /// 取值见 ImageAccessLevel 枚举
+  accessLevel ImageAccessLevel
+  isQcPassed  Boolean          @default(false)
+  qcNote      String?          @db.VarChar(255)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+
+  medicalCase MedicalCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  aiAnalyses  AIAnalysis[]
+
+  @@index([caseId])
+  @@index([accessLevel])
+}
+
+model AIAnalysis {
+  id               Int           @id @default(autoincrement())
+  caseId           Int
+  imageId          Int?
+  malignancyProb   Float
+  top1Disease      String?
+  top1Prob         Float?
+  top2Disease      String?
+  top2Prob         Float?
+  top3Disease      String?
+  top3Prob         Float?
+  modelVersion     String?
+  summary          String?       @db.Text
+  heatmapUrl       String?       @db.VarChar(255)
+  /// 数据库列仍为 init 时的 bboxJson，避免迁移删列丢数据
+  lesionBoxesJson  Json?         @map("bboxJson")
+  featureJson      Json?
+  createdAt        DateTime      @default(now())
+  /// 已有数据迁移需带默认；之后仍由 @updatedAt 在更新时自动刷新
+  updatedAt        DateTime      @default(now()) @updatedAt
+
+  medicalCase      MedicalCase   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  medicalImage     MedicalImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([imageId])
+}
+
+model Diagnosis {
+  id             Int         @id @default(autoincrement())
+  caseId          Int
+  doctorId        Int
+  conclusion      String      @db.Text
+  treatmentPlan   String?     @db.Text
+  suggestion      String?     @db.Text
+  isFinal         Boolean     @default(false)
+  reviewComment   String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  medicalCase     MedicalCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  doctor          User        @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@index([doctorId])
+}
+
+model Referral {
+  id               Int            @id @default(autoincrement())
+  referralCode     String         @unique @db.VarChar(50)
+  caseId           Int
+  fromHospitalId   Int
+  toHospitalId     Int
+  type             ReferralType
+  status           ReferralStatus @default(PENDING)
+  note             String?        @db.Text
+  callbackOpinion  String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  medicalCase  MedicalCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fromHospital Hospital    @relation("ReferralFromHospital", fields: [fromHospitalId], references: [id], onDelete: Restrict)
+  toHospital   Hospital    @relation("ReferralToHospital", fields: [toHospitalId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@index([fromHospitalId])
+  @@index([toHospitalId])
+  @@index([status])
+}
+
+model ResearchProject {
+  id                   Int            @id @default(autoincrement())
+  projectCode          String         @unique @db.VarChar(50)
+  name                 String         @db.VarChar(160)
+  level                String?        @db.VarChar(60)
+  principalInvestigator String        @db.VarChar(80)
+  ethicsCode           String?        @db.VarChar(80)
+  ethicsExpireAt       DateTime?
+  dataScope            String?        @db.Text
+  status               ProjectStatus
+  progress             Int            @default(0)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  members              ProjectMember[]
+  tasks                ResearchTask[]
+  approvals            ApprovalRecord[]
+  experimentRuns ExperimentRun[]
+
+  @@index([status])
+}
+
+model ProjectMember {
+  id          Int          @id @default(autoincrement())
+  projectId   Int
+  userId      Int
+  role        ProjectRole
+  joinedAt     DateTime     @default(now())
+
+  project      ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ResearchTask {
+  id          Int         @id @default(autoincrement())
+  projectId   Int
+  title       String
+  description String?
+  /// 任务类型；历史数据迁移时依赖 @default，勿随意删除默认值
+  type        String      @default("GENERAL") @db.VarChar(40)
+  status      TaskStatus  @default(PENDING)
+  assignerId  Int?
+  assigneeId  Int?
+  dueAt       DateTime?
+  progress    Int         @default(0)
+  note        String?     @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  project     ResearchProject @relation(fields: [projectId], references: [id])
+  assignee    User?           @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assigner    User?           @relation("TaskAssigner", fields: [assignerId], references: [id])
+}
+
+model ApprovalRecord {
+  id           Int            @id @default(autoincrement())
+  approvalCode String         @unique @db.VarChar(50)
+  type         ApprovalType
+  targetType   String         @db.VarChar(80)
+  targetId     String         @db.VarChar(80)
+  applicantId  Int
+  reviewerId   Int?
+  projectId    Int?
+  status       ApprovalStatus
+  reason       String?        @db.Text
+  snapshotJson Json?
+  createdAt    DateTime       @default(now())
+  reviewedAt   DateTime?
+  updatedAt    DateTime       @default(now()) @updatedAt
+
+  applicant    User           @relation("ApprovalApplicant", fields: [applicantId], references: [id], onDelete: Restrict)
+  reviewer     User?          @relation("ApprovalReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  project      ResearchProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([type])
+  @@index([applicantId])
+}
+
+model SecurityAlert {
+  id           Int          @id @default(autoincrement())
+  alertCode    String       @unique @db.VarChar(50)
+  title        String       @db.VarChar(160)
+  source       String?      @db.VarChar(100)
+  level        AlertLevel
+  status       AlertStatus
+  targetType   String?      @db.VarChar(80)
+  targetId     String?      @db.VarChar(80)
+  detail       String?      @db.Text
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([level])
+  @@index([status])
+}
+
+model BackupRecord {
+  id           Int          @id @default(autoincrement())
+  backupCode   String       @unique @db.VarChar(50)
+  type         BackupType
+  status       BackupStatus
+  storagePath  String?      @db.VarChar(255)
+  sizeMb       Float?
+  note         String?      @db.Text
+  createdAt    DateTime     @default(now())
+  finishedAt   DateTime?
+
+  @@index([status])
+  @@index([type])
+}
+
+model LoginLog {
+  id           Int          @id @default(autoincrement())
+  userId        Int?
+  username      String      @db.VarChar(80)
+  roleAttempt   String?     @db.VarChar(40)
+  ipAddress     String?     @db.VarChar(64)
+  userAgent     String?     @db.VarChar(255)
+  result        LoginResult
+  reason        String?     @db.VarChar(255)
+  createdAt     DateTime    @default(now())
+
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([username])
+  @@index([result])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id           Int        @id @default(autoincrement())
+  userId        Int
+  actorName     String     @db.VarChar(80)
+  actorRole     String     @db.VarChar(40)
+  actionType    String     @db.VarChar(80)
+  targetType    String     @db.VarChar(80)
+  targetId      String     @db.VarChar(80)
+  detail        String?    @db.Text
+  ipAddress     String?    @db.VarChar(64)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now()) @updatedAt
+
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([actionType])
+  @@index([createdAt])
+}
+
+model ExperimentRun {
+  id          Int              @id @default(autoincrement())
+  projectId   Int
+  createdById Int
+  name        String
+  modelName   String
+  datasetName String
+  status      ExperimentStatus @default(DRAFT)
+  accuracy    Float?
+  recall      Float?
+  f1Score     Float?
+  note        String?          @db.Text
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  project     ResearchProject  @relation(fields: [projectId], references: [id])
+  createdBy   User             @relation("ExperimentCreator", fields: [createdById], references: [id])
+}
+

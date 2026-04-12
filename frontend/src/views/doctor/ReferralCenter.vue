@@ -3,130 +3,348 @@
     <div class="page-head">
       <div>
         <h1>分级诊疗</h1>
-        <div class="page-subtitle">院内会诊、上转协同、跨院远程会诊统一处理</div>
+        <div class="page-subtitle">发起上转或会诊，查看申请状态与回传意见</div>
+      </div>
+
+      <div class="head-actions">
+        <button class="ghost-btn" @click="goToRecords" :disabled="!selected">
+          查看病例
+        </button>
+        <button class="primary-btn" @click="handleCreate" :disabled="submitting">
+          {{ submitting ? '提交中...' : '提交申请' }}
+        </button>
       </div>
     </div>
 
-    <section class="summary-grid">
-      <div class="summary-card">
-        <div class="summary-title">待处理流转</div>
-        <div class="summary-value">6</div>
-        <div class="summary-note">含会诊与转诊</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">高危优先</div>
-        <div class="summary-value">2</div>
-        <div class="summary-note">建议优先响应</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-title">跨院待审核</div>
-        <div class="summary-value">1</div>
-        <div class="summary-note">进入管理员流程</div>
-      </div>
-    </section>
+    <div v-if="loading" class="page-tip">正在加载分级诊疗数据...</div>
+    <div v-else-if="error" class="page-tip error">{{ error }}</div>
 
-    <section class="panel-card">
-      <div class="panel-head">
-        <span>分流规则</span>
-        <span class="panel-link">建议判断路径</span>
-      </div>
+    <template v-else>
+      <section class="metric-grid">
+        <div class="metric-card">
+          <div class="metric-label">待审批</div>
+          <div class="metric-value">{{ board.summary.pendingCount }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">处理中</div>
+          <div class="metric-value">{{ board.summary.progressCount }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">已完成</div>
+          <div class="metric-value">{{ board.summary.completedCount }}</div>
+        </div>
+      </section>
 
-      <div class="flow-grid">
-        <div class="flow-card">
-          <div class="flow-title">院内普通会诊</div>
-          <div class="flow-desc">用于本院主任 / 上级医生快速协同。</div>
-          <div class="flow-tag success">无需管理员审核</div>
+      <section class="content-grid">
+        <!-- 左 -->
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>申请队列</span>
+            <span class="panel-link">我的申请</span>
+          </div>
+
+          <div class="filter-row">
+            <button
+                v-for="item in board.filters.statusOptions"
+                :key="item.value"
+                class="filter-chip"
+                :class="{ active: currentStatus === item.value }"
+                @click="handleStatusChange(item.value)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+
+          <div v-if="board.queue.length" class="queue-list">
+            <div
+                v-for="item in board.queue"
+                :key="item.referralId"
+                class="queue-item"
+                :class="{ active: selected?.referralId === item.referralId }"
+                @click="handleSelect(item.referralId, item.caseId)"
+            >
+              <div class="queue-top">
+                <span class="queue-code">{{ item.referralCode }}</span>
+                <span :class="['queue-status', item.statusClass]">{{ item.status }}</span>
+              </div>
+              <div class="queue-title">{{ item.patientName }}</div>
+              <div class="queue-desc">{{ item.caseCode }} · {{ item.typeLabel }}</div>
+              <div class="queue-meta">{{ item.updatedAt }}</div>
+            </div>
+          </div>
+
+          <div v-else class="empty-text">当前筛选下暂无申请</div>
         </div>
 
-        <div class="flow-card">
-          <div class="flow-title">上转诊疗</div>
-          <div class="flow-desc">用于高危或基层难以确认病例的上级医院接收处理。</div>
-          <div class="flow-tag warning">由目标医院决定接收</div>
-        </div>
+        <!-- 中 -->
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>申请详情</span>
+            <span class="panel-link">{{ selected?.referralCode || '--' }}</span>
+          </div>
 
-        <div class="flow-card">
-          <div class="flow-title">跨院远程会诊</div>
-          <div class="flow-desc">用于疑难病例的外院专家远程协同复核。</div>
-          <div class="flow-tag danger">进入管理员审核流</div>
-        </div>
-      </div>
-    </section>
+          <template v-if="selected">
+            <div class="preview-box" v-if="selected.previewUrl">
+              <img :src="getBackendFileUrl(selected.previewUrl)" alt="" />
+            </div>
 
-    <section class="content-grid">
-      <div class="panel-card">
-        <div class="panel-head">
-          <span>当前流转列表</span>
-          <span class="panel-link">按优先级</span>
-        </div>
-
-        <div class="queue-list">
-          <div v-for="item in flows" :key="item.id" class="queue-item">
-            <div class="queue-main">
-              <div>
-                <div class="queue-title">{{ item.id }} · {{ item.title }}</div>
-                <div class="queue-meta">{{ item.meta }}</div>
+            <div class="detail-grid">
+              <div class="info-item">
+                <label>病例编号</label>
+                <div>{{ selected.caseCode }}</div>
+              </div>
+              <div class="info-item">
+                <label>患者姓名</label>
+                <div>{{ selected.patientName }}</div>
+              </div>
+              <div class="info-item">
+                <label>患者编号</label>
+                <div>{{ selected.patientCode }}</div>
+              </div>
+              <div class="info-item">
+                <label>协同类型</label>
+                <div>{{ selected.typeLabel }}</div>
+              </div>
+              <div class="info-item">
+                <label>转出医院</label>
+                <div>{{ selected.fromHospital }}</div>
+              </div>
+              <div class="info-item">
+                <label>目标医院</label>
+                <div>{{ selected.toHospital }}</div>
+              </div>
+              <div class="info-item full">
+                <label>申请说明</label>
+                <div>{{ selected.note }}</div>
               </div>
             </div>
-            <div class="queue-side">
-              <div :class="['status-badge', item.class]">{{ item.status }}</div>
-              <div class="queue-time">{{ item.time }}</div>
+
+            <div v-if="selected.callbackOpinion" class="callback-box">
+              <div class="callback-title">回传意见</div>
+              <div class="callback-content">{{ selected.callbackOpinion }}</div>
+              <button class="ghost-btn" @click="handleAcknowledge">
+                已阅回传意见
+              </button>
             </div>
-          </div>
-        </div>
-      </div>
+          </template>
 
-      <div class="panel-card">
-        <div class="panel-head">
-          <span>当前关注</span>
-          <span class="panel-link">实时状态</span>
+          <div v-else class="empty-text">请选择左侧申请查看详情</div>
         </div>
 
-        <div class="focus-list">
-          <div class="focus-item">
-            <div class="focus-title">高危病例待接收</div>
-            <div class="focus-value">1 例</div>
+        <!-- 右 -->
+        <div class="panel-card">
+          <div class="panel-head">
+            <span>发起申请</span>
+            <span class="panel-link">简洁操作区</span>
           </div>
-          <div class="focus-item">
-            <div class="focus-title">远程会诊待审核</div>
-            <div class="focus-value">1 单</div>
+
+          <div class="form-item">
+            <label>选择病例</label>
+            <select v-model="form.caseId">
+              <option :value="null">请选择病例</option>
+              <option v-for="item in board.formOptions.caseOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
           </div>
-          <div class="focus-item">
-            <div class="focus-title">会诊意见已回传</div>
-            <div class="focus-value">2 单</div>
+
+          <div class="form-item">
+            <label>申请类型</label>
+            <select v-model="form.type">
+              <option v-for="item in board.formOptions.typeOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-item">
+            <label>目标医院</label>
+            <select v-model="form.toHospitalId">
+              <option :value="null">请选择医院</option>
+              <option v-for="item in board.formOptions.hospitalOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-item">
+            <label>申请备注</label>
+            <textarea v-model="form.note" rows="4" placeholder="请输入申请原因或补充说明"></textarea>
+          </div>
+
+          <div class="action-stack">
+            <button class="primary-btn full" @click="handleCreate" :disabled="submitting">
+              {{ submitting ? '提交中...' : '提交申请' }}
+            </button>
+            <button class="ghost-btn full" @click="goToDiagnosis" :disabled="!form.caseId && !selected">
+              进入影像诊断
+            </button>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-const flows = [
-  {
-    id: 'RF-3011',
-    title: '疑似黑色素瘤高危转诊',
-    meta: '恶性概率 81% · 上级医院待接收',
-    status: '待接收',
-    class: 'danger',
-    time: '09:41'
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  acknowledgeReferralApi,
+  createReferralApi,
+  getBackendFileUrl,
+  getReferralBoardApi
+} from '../../api/referrals'
+
+const route = useRoute()
+const router = useRouter()
+
+const loading = ref(false)
+const error = ref('')
+const submitting = ref(false)
+const selected = ref(null)
+const currentStatus = ref('ALL')
+
+const board = ref({
+  summary: {
+    pendingCount: 0,
+    progressCount: 0,
+    completedCount: 0
   },
-  {
-    id: 'CS-2023',
-    title: '院内普通会诊：色素病变鉴别',
-    meta: '已提交本院主任 · 等待会诊意见',
-    status: '进行中',
-    class: 'processing',
-    time: '10:08'
+  filters: {
+    currentStatus: 'ALL',
+    statusOptions: []
   },
-  {
-    id: 'RC-1188',
-    title: '跨院远程会诊申请',
-    meta: '等待管理员审核后转外院专家',
-    status: '待审核',
-    class: 'warning',
-    time: '11:26'
+  queue: [],
+  selected: null,
+  formOptions: {
+    caseOptions: [],
+    hospitalOptions: [],
+    typeOptions: []
   }
-]
+})
+
+const form = reactive({
+  caseId: null,
+  type: 'REFERRAL',
+  toHospitalId: null,
+  note: ''
+})
+
+async function fetchBoard(status = currentStatus.value) {
+  try {
+    loading.value = true
+    error.value = ''
+
+    const data = await getReferralBoardApi({
+      referralId: route.query.referralId || '',
+      caseId: route.query.caseId || '',
+      status
+    })
+
+    board.value = data
+    selected.value = data.selected || null
+    currentStatus.value = data.filters?.currentStatus || status
+
+    if (!form.caseId && data.formOptions.caseOptions.length) {
+      form.caseId = Number(route.query.caseId) || data.formOptions.caseOptions[0].value
+    }
+  } catch (err) {
+    error.value = err.message || '分级诊疗页加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleStatusChange(status) {
+  currentStatus.value = status
+  await router.replace({
+    path: '/doctor/referral',
+    query: {
+      ...route.query,
+      status
+    }
+  })
+  await fetchBoard(status)
+}
+
+async function handleSelect(referralId, caseId) {
+  await router.replace({
+    path: '/doctor/referral',
+    query: {
+      referralId,
+      caseId,
+      status: currentStatus.value
+    }
+  })
+  await fetchBoard(currentStatus.value)
+}
+
+async function handleCreate() {
+  try {
+    submitting.value = true
+    const data = await createReferralApi({
+      caseId: form.caseId,
+      type: form.type,
+      toHospitalId: form.toHospitalId,
+      note: form.note
+    })
+
+    window.alert(`申请已提交：${data.referralCode}`)
+    form.note = ''
+
+    await router.replace({
+      path: '/doctor/referral',
+      query: {
+        referralId: data.referralId,
+        caseId: form.caseId,
+        status: 'ALL'
+      }
+    })
+
+    await fetchBoard('ALL')
+  } catch (err) {
+    window.alert(err.message || '提交失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function handleAcknowledge() {
+  if (!selected.value) return
+  try {
+    await acknowledgeReferralApi(selected.value.referralId)
+    window.alert('已确认查看回传意见')
+  } catch (err) {
+    window.alert(err.message || '操作失败')
+  }
+}
+
+function goToRecords() {
+  if (!selected.value) return
+  router.push({
+    path: '/doctor/records',
+    query: {
+      caseId: selected.value.caseId
+    }
+  })
+}
+
+function goToDiagnosis() {
+  const targetCaseId = form.caseId || selected.value?.caseId
+  if (!targetCaseId) return
+
+  router.push({
+    path: '/doctor/diagnosis',
+    query: {
+      caseId: targetCaseId
+    }
+  })
+}
+
+onMounted(() => {
+  fetchBoard(route.query.status || 'ALL')
+})
 </script>
 
 <style scoped>
@@ -134,6 +352,13 @@ const flows = [
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
 }
 
 .page-head h1 {
@@ -144,11 +369,12 @@ const flows = [
 }
 
 .page-subtitle,
-.summary-note,
-.flow-desc,
 .panel-link,
+.page-tip,
+.queue-desc,
 .queue-meta,
-.queue-time {
+.modal-subtitle,
+.callback-content {
   font-size: 12px;
   line-height: 1.8;
   color: #7892b0;
@@ -158,54 +384,79 @@ const flows = [
   margin-top: 6px;
 }
 
-.summary-grid,
-.flow-grid,
-.content-grid {
+.page-tip.error {
+  color: #d83b3b;
+}
+
+.head-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.primary-btn,
+.ghost-btn {
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-btn {
+  border: none;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+}
+
+.ghost-btn {
+  border: 1px solid #d8e5f2;
+  background: #fff;
+  color: #365a7f;
+}
+
+.full {
+  width: 100%;
+}
+
+.metric-grid {
   display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
 }
 
-.summary-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.flow-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.content-grid {
-  grid-template-columns: 1.1fr 0.9fr;
-}
-
-.summary-card,
+.metric-card,
 .panel-card,
-.flow-card,
-.focus-item,
-.queue-item {
-  background: rgba(255, 255, 255, 0.82);
+.queue-item,
+.info-item,
+.callback-box {
+  background: rgba(255,255,255,.82);
   border: 1px solid #dce8f4;
   border-radius: 22px;
-  box-shadow: 0 10px 30px rgba(17, 56, 102, 0.05);
+  box-shadow: 0 10px 30px rgba(17,56,102,.05);
 }
 
-.summary-card {
+.metric-card {
   padding: 18px;
 }
 
-.summary-title {
+.metric-label {
   font-size: 13px;
   color: #7590b0;
 }
 
-.summary-value {
+.metric-value {
   margin-top: 10px;
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 800;
   color: #17385f;
 }
 
-.summary-note {
-  margin-top: 8px;
+.content-grid {
+  display: grid;
+  grid-template-columns: 0.84fr 1.02fr 0.86fr;
+  gap: 16px;
 }
 
 .panel-card {
@@ -214,8 +465,8 @@ const flows = [
 
 .panel-head {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   padding-bottom: 12px;
   margin-bottom: 12px;
   border-bottom: 1px solid #e6eef7;
@@ -224,47 +475,31 @@ const flows = [
   color: #17385f;
 }
 
-.flow-card {
-  padding: 18px;
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.flow-title,
-.queue-title,
-.focus-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: #1d466f;
-}
-
-.flow-desc {
-  margin-top: 8px;
-}
-
-.flow-tag {
-  display: inline-flex;
-  margin-top: 12px;
-  padding: 6px 10px;
+.filter-chip {
+  height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
+  border: 1px solid #d8e5f2;
+  background: #f7fbff;
+  color: #5f7c98;
   font-size: 12px;
+  cursor: pointer;
 }
 
-.flow-tag.success {
-  background: #ecfbf5;
-  color: #14906a;
+.filter-chip.active {
+  background: #edf6ff;
+  color: #2a70b8;
+  border-color: #bfd8f8;
 }
 
-.flow-tag.warning {
-  background: #fff5df;
-  color: #c98912;
-}
-
-.flow-tag.danger {
-  background: #feecec;
-  color: #d83b3b;
-}
-
-.queue-list,
-.focus-list {
+.queue-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -272,63 +507,157 @@ const flows = [
 
 .queue-item {
   padding: 14px;
-  background: #f9fcff;
-  border: 1px solid #e3edf7;
-  box-shadow: none;
+  cursor: pointer;
+}
+
+.queue-item.active {
+  background: #edf6ff;
+  border-color: #bfd8f8;
+}
+
+.queue-top {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
 }
 
-.queue-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
+.queue-code {
+  font-size: 12px;
+  color: #7a93af;
+  font-weight: 700;
 }
 
-.status-badge {
-  padding: 6px 10px;
+.queue-status {
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
-  white-space: nowrap;
 }
 
-.status-badge.processing {
-  background: #edf6ff;
-  color: #2a70b8;
-}
-
-.status-badge.warning {
+.queue-status.warning {
   background: #fff5df;
   color: #c98912;
 }
 
-.status-badge.danger {
+.queue-status.blue {
+  background: #edf6ff;
+  color: #2a70b8;
+}
+
+.queue-status.success {
+  background: #ecfbf5;
+  color: #14906a;
+}
+
+.queue-status.danger {
   background: #feecec;
   color: #d83b3b;
 }
 
-.focus-item {
-  padding: 18px;
-  background: #f9fcff;
-  border: 1px solid #e3edf7;
-  box-shadow: none;
-}
-
-.focus-value {
-  margin-top: 12px;
-  font-size: 24px;
+.queue-title {
+  margin-top: 8px;
+  font-size: 15px;
   font-weight: 800;
-  color: #17385f;
+  color: #1d466f;
 }
 
-@media (max-width: 1280px) {
-  .summary-grid,
-  .flow-grid,
-  .content-grid {
+.preview-box {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #eef4fa;
+  border: 1px solid #dce8f4;
+  margin-bottom: 16px;
+}
+
+.preview-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.info-item {
+  padding: 14px;
+}
+
+.info-item.full {
+  grid-column: 1 / -1;
+}
+
+.info-item label {
+  display: block;
+  font-size: 12px;
+  color: #7a93af;
+  margin-bottom: 8px;
+}
+
+.info-item div {
+  font-size: 14px;
+  color: #1d466f;
+  line-height: 1.7;
+}
+
+.callback-box {
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.callback-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1d466f;
+}
+
+.form-item {
+  margin-top: 14px;
+}
+
+.form-item label {
+  display: block;
+  font-size: 12px;
+  color: #7a93af;
+  margin-bottom: 8px;
+}
+
+.form-item select,
+.form-item textarea {
+  width: 100%;
+  border: 1px solid #d8e5f2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #1d466f;
+  outline: none;
+}
+
+.action-stack {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-text {
+  padding: 12px 0;
+  color: #7892b0;
+}
+
+@media (max-width: 1360px) {
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .metric-grid,
+  .content-grid,
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 }

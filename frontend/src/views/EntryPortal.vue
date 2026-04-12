@@ -1,5 +1,5 @@
 <template>
-  <div class="portal-page">
+  <div class="portal-page" :class="{ 'portal-page--modal-open': showLoginModal }">
     <div class="bg-layer bg-1"></div>
     <div class="bg-layer bg-2"></div>
     <div class="bg-layer bg-3"></div>
@@ -10,7 +10,7 @@
       <div class="brand-group">
         <div class="brand-mark">肤</div>
         <div class="brand-copy">
-          <div class="brand-title">一肤当关</div>
+          <div class="brand-title">云诊智护</div>
           <div class="brand-subtitle">基于 CR-Conformer 的医疗 AI 协同平台</div>
         </div>
       </div>
@@ -31,8 +31,8 @@
           <div class="hero-badge">系统统一入口</div>
 
           <h1>
-            皮肤科 AI 辅助诊疗与治理
-            <span>一体化专业平台</span>
+            面向 皮肤病 的“诊学研”
+            <span>大数据集成管理平台</span>
           </h1>
 
           <p class="hero-desc">
@@ -112,9 +112,9 @@
 
         <div class="feature-grid">
           <div class="feature-card">
-            <div class="feature-icon">诊</div>
-            <div class="feature-title">AI 辅助诊疗</div>
-            <div class="feature-desc">AI 预诊、恶性概率评估、医生复核</div>
+            <div class="feature-icon">数</div>
+            <div class="feature-title">大数据集成</div>
+            <div class="feature-desc">数据汇聚、标准化、互联互通</div>
           </div>
 
           <div class="feature-card">
@@ -124,15 +124,15 @@
           </div>
 
           <div class="feature-card">
-            <div class="feature-icon">转</div>
-            <div class="feature-title">分级诊疗闭环</div>
-            <div class="feature-desc">基层上送、上级接收、会诊回传</div>
+            <div class="feature-icon">诊</div>
+            <div class="feature-title">AI 辅助诊疗</div>
+            <div class="feature-desc">AI 预诊、恶性概率评估、医生复核</div>
           </div>
 
           <div class="feature-card">
-            <div class="feature-icon">审</div>
-            <div class="feature-title">治理与审计</div>
-            <div class="feature-desc">账号权限、审批流、审计日志</div>
+            <div class="feature-icon">转</div>
+            <div class="feature-title">分级诊疗闭环</div>
+            <div class="feature-desc">基层上送、上级接收、会诊回传</div>
           </div>
         </div>
       </section>
@@ -158,7 +158,7 @@
             <div class="modal-brand">
               <div class="modal-brand-mark">肤</div>
               <div>
-                <div class="modal-brand-title">一肤当关</div>
+                <div class="modal-brand-title">云诊智护</div>
                 <div class="modal-brand-subtitle">统一登录中心</div>
               </div>
             </div>
@@ -169,24 +169,24 @@
               <div class="left-pill">
                 <span class="left-pill-icon">诊</span>
                 <div class="left-pill-copy">
-                  <strong>医生端</strong>
-                  <span>AI复核 · 分级诊疗</span>
+                  <span class="left-pill-heading">医生端</span>
+                  <span class="left-pill-desc">AI复核 · 分级诊疗</span>
                 </div>
               </div>
 
               <div class="left-pill">
                 <span class="left-pill-icon">管</span>
                 <div class="left-pill-copy">
-                  <strong>管理员端</strong>
-                  <span>权限控制 · 平台治理</span>
+                  <span class="left-pill-heading">管理员端</span>
+                  <span class="left-pill-desc">权限控制 · 平台治理</span>
                 </div>
               </div>
 
               <div class="left-pill">
                 <span class="left-pill-icon">安</span>
                 <div class="left-pill-copy">
-                  <strong>安全审计</strong>
-                  <span>关键操作全程留痕</span>
+                  <span class="left-pill-heading">安全审计</span>
+                  <span class="left-pill-desc">关键操作全程留痕</span>
                 </div>
               </div>
 
@@ -224,7 +224,7 @@
             </div>
 
             <div class="form-stage">
-              <transition name="fade-slide" mode="out-in">
+              <transition name="fade-slide">
                 <form
                     v-if="activeRole === 'doctor'"
                     key="doctor"
@@ -284,11 +284,11 @@
                       <input type="checkbox" v-model="doctorForm.remember" />
                       <span>记住账号</span>
                     </label>
-                    <a href="#" class="link">忘记密码？</a>
+                    <a href="#" class="link" @click.prevent>忘记密码？</a>
                   </div>
 
-                  <button type="submit" class="login-btn doctor-btn">
-                    <span>进入医生工作台</span>
+                  <button type="submit" class="login-btn doctor-btn" :disabled="loginLoading">
+                    <span>{{ loginLoading ? '登录中...' : '进入医生工作台' }}</span>
                     <svg viewBox="0 0 24 24" fill="none">
                       <path d="M5 12h14M13 5l7 7-7 7" />
                     </svg>
@@ -366,11 +366,11 @@
                       <input type="checkbox" v-model="adminForm.remember" />
                       <span>安全设备记住</span>
                     </label>
-                    <a href="#" class="link">需要帮助？</a>
+                    <a href="#" class="link" @click.prevent>需要帮助？</a>
                   </div>
 
-                  <button type="submit" class="login-btn admin-btn">
-                    <span>进入管理控制台</span>
+                  <button type="submit" class="login-btn doctor-btn" :disabled="loginLoading">
+                    <span>{{ loginLoading ? '登录中...' : '进入管理员工作台' }}</span>
                     <svg viewBox="0 0 24 24" fill="none">
                       <path d="M5 12h14M13 5l7 7-7 7" />
                     </svg>
@@ -396,14 +396,19 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { loginApi } from '../api/auth'
+import loginBgUrl from '../assets/images/loginBackground.png'
 
 const router = useRouter()
+
+const loginModalBg = `url("${loginBgUrl}")`
 
 const showLoginModal = ref(false)
 const activeRole = ref('doctor')
 
 const showPwd = ref(false)
 const showAdminPwd = ref(false)
+const loginLoading = ref(false)
 
 const doctorForm = reactive({
   username: '',
@@ -426,13 +431,38 @@ const closeLogin = () => {
   showLoginModal.value = false
 }
 
-const handleLogin = () => {
-  if (activeRole.value === 'doctor') {
-    console.log('医生登录:', doctorForm)
-    router.push('/doctor/workbench')
-  } else {
-    console.log('管理员登录:', adminForm)
-    router.push('/admin/dashboard')
+const saveLoginResult = (data) => {
+  window.localStorage.setItem('token', data.token)
+  window.localStorage.setItem('authUser', JSON.stringify(data.user))
+  window.localStorage.setItem('researchAccessStatus', data.user.hasResearchAccess ? 'approved' : 'pending')
+}
+
+const handleLogin = async () => {
+  try {
+    loginLoading.value = true
+
+    const isDoctor = activeRole.value === 'doctor'
+    const form = isDoctor ? doctorForm : adminForm
+
+    const data = await loginApi({
+      username: form.username,
+      password: form.password,
+      roleType: isDoctor ? 'doctor' : 'admin',
+      orgToken: isDoctor ? undefined : form.orgToken
+    })
+
+    saveLoginResult(data)
+    closeLogin()
+
+    if (data.user.role === 'DOCTOR') {
+      router.replace({ name: 'doctor-workbench' })
+    } else {
+      router.replace({ name: 'admin-dashboard' })
+    }
+  } catch (error) {
+    window.alert(error.message || '登录失败')
+  } finally {
+    loginLoading.value = false
   }
 }
 </script>
@@ -509,6 +539,13 @@ const handleLogin = () => {
   background-size: 44px 44px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.52), transparent 92%);
   opacity: 0.75;
+}
+
+/* 登录弹窗打开时隐藏整页网格，避免叠在弹窗上像「表格线」（不改登录区蒙版） */
+.portal-page--modal-open .bg-grid {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* header：保持上一版不改结构 */
@@ -1062,6 +1099,7 @@ const handleLogin = () => {
   display: grid;
   grid-template-columns: 0.4fr 0.6fr;
   backdrop-filter: blur(18px);
+  isolation: isolate;
 }
 
 .login-modal::before {
@@ -1101,46 +1139,26 @@ const handleLogin = () => {
   stroke-width: 2;
 }
 
-/* 左侧加呼吸感、玻璃感 */
+/* 左侧：背景图 + 白色蒙版（图：src/assets/images/loginBackground.png） */
 .login-modal-left {
   position: relative;
   height: 100%;
   padding: 28px 24px 24px;
-  background:
-      radial-gradient(circle at 18% 12%, rgba(47, 111, 237, 0.14) 0%, transparent 30%),
-      radial-gradient(circle at 82% 78%, rgba(25, 198, 208, 0.12) 0%, transparent 34%),
-      linear-gradient(180deg, rgba(236, 247, 255, 0.76) 0%, rgba(239, 247, 255, 0.84) 54%, rgba(236, 245, 254, 0.92) 100%);
-  border-right: 1px solid rgba(116, 152, 193, 0.10);
+  background: v-bind(loginModalBg) center/cover no-repeat;
+  border-right: 1px solid rgba(116, 152, 193, 0.12);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .login-modal-left::before {
   content: '';
   position: absolute;
-  top: 14px;
-  left: 18px;
-  right: 18px;
-  height: 120px;
-  border-radius: 30px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.38), rgba(255,255,255,0.04));
-  filter: blur(18px);
-  opacity: 0.85;
+  inset: 0;
+  z-index: 0;
   pointer-events: none;
-}
-
-.login-modal-left::after {
-  content: '';
-  position: absolute;
-  right: -20px;
-  bottom: 80px;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(25,198,208,0.18) 0%, transparent 68%);
-  filter: blur(18px);
-  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(248, 250, 252, 0.82) 50%, rgba(241, 245, 249, 0.78) 100%);
 }
 
 .login-modal-left > * {
@@ -1172,12 +1190,12 @@ const handleLogin = () => {
 .modal-brand-title {
   font-size: 20px;
   font-weight: 900;
-  color: #143556;
+  color: #1e3a5f;
 }
 
 .modal-brand-subtitle {
   font-size: 12px;
-  color: #7190ac;
+  color: #64748b;
   margin-top: 2px;
 }
 
@@ -1185,7 +1203,7 @@ const handleLogin = () => {
   font-size: 28px;
   line-height: 1.18;
   font-weight: 900;
-  color: #143556;
+  color: #1e3a5f;
   margin-bottom: 22px;
 }
 
@@ -1202,21 +1220,10 @@ const handleLogin = () => {
   align-items: center;
   padding: 14px 14px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  box-shadow:
-      0 10px 24px rgba(108, 139, 176, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.58);
-  transition: transform 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
-  backdrop-filter: blur(14px);
-}
-
-.left-pill:hover {
-  transform: translateY(-3px);
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow:
-      0 14px 28px rgba(108, 139, 176, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.70);
+  background: transparent;
+  border: none;
+  transition: transform 0.24s ease;
+  min-width: 0;
 }
 
 .left-pill-icon {
@@ -1237,17 +1244,20 @@ const handleLogin = () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  flex: 1;
 }
 
-.left-pill-copy strong {
+.left-pill-heading {
   font-size: 15px;
-  color: #1d4268;
+  color: #334155;
   font-weight: 800;
+  line-height: 1.35;
 }
 
-.left-pill-copy span {
+.left-pill-desc {
   font-size: 12px;
-  color: #7b93ad;
+  color: #64748b;
   line-height: 1.4;
 }
 
@@ -1255,19 +1265,14 @@ const handleLogin = () => {
   margin-top: 6px;
   padding: 14px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.46);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  box-shadow:
-      0 10px 24px rgba(108, 139, 176, 0.08),
-      inset 0 1px 0 rgba(255,255,255,0.52);
-  backdrop-filter: blur(12px);
-  animation: softBreath 4.8s ease-in-out infinite;
+  background: transparent;
+  border: none;
 }
 
 .highlight-title {
   font-size: 13px;
   font-weight: 800;
-  color: #315373;
+  color: #475569;
   margin-bottom: 10px;
 }
 
@@ -1283,8 +1288,8 @@ const handleLogin = () => {
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  background: rgba(47, 111, 237, 0.08);
-  color: #3f6283;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1e40af;
   font-size: 12px;
   font-weight: 700;
 }
@@ -1292,17 +1297,12 @@ const handleLogin = () => {
 .modal-left-foot {
   margin-top: auto;
   font-size: 12px;
-  color: #7690a9;
+  color: #64748b;
   line-height: 1.7;
   padding: 13px 15px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.50);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  box-shadow:
-      0 8px 20px rgba(108, 139, 176, 0.06),
-      inset 0 1px 0 rgba(255,255,255,0.52);
-  backdrop-filter: blur(12px);
-  animation: softBreath 5.2s ease-in-out infinite;
+  background: transparent;
+  border: none;
 }
 
 .login-modal-right {

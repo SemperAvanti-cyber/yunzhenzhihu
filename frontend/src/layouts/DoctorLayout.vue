@@ -4,7 +4,7 @@
       <div class="brand-wrap">
         <div class="brand-logo">肤</div>
         <div class="brand-text">
-          <div class="brand-title">一肤当关 · 医疗AI协同平台</div>
+          <div class="brand-title">云诊智护 · 医疗AI协同平台</div>
           <div class="brand-subtitle">Doctor Clinical Workspace</div>
         </div>
       </div>
@@ -30,13 +30,15 @@
         </div>
 
         <div class="user-box">
-          <div class="user-avatar">张</div>
+          <div class="user-avatar">{{ avatarText }}</div>
           <div class="user-inline">
-            <span class="user-name">张医生</span>
+            <span class="user-name">{{ displayName }}</span>
             <span class="user-divider">·</span>
-            <span class="user-role">皮肤科 · 上级医院</span>
+            <span class="user-role">{{ userSubtitle }}</span>
           </div>
         </div>
+
+        <button type="button" class="logout-btn" @click="handleLogout">退出</button>
       </div>
     </header>
 
@@ -79,9 +81,33 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getAuthUser, logout as doLogout } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+
+const authUser = computed(() => getAuthUser())
+
+const displayName = computed(() => authUser.value?.realName || '医生')
+
+const avatarText = computed(() => {
+  const n = String(displayName.value || '').trim()
+  return n ? n.slice(0, 1) : '医'
+})
+
+const userSubtitle = computed(() => {
+  const u = authUser.value
+  if (!u) return '临床医生'
+  const dept = u.departmentName || ''
+  const hosp = u.hospitalName || ''
+  if (dept && hosp) return `${dept} · ${hosp}`
+  return dept || hosp || '临床医生'
+})
+
+function handleLogout() {
+  if (!window.confirm('确定退出登录？')) return
+  doLogout(router)
+}
 
 const topMenus = [
   { key: 'workbench', label: '工作台', path: '/doctor/workbench' },
@@ -90,7 +116,7 @@ const topMenus = [
 
 const workbenchMenus = [
   { key: 'workbench-home', label: '工作总览', icon: '总', path: '/doctor/workbench' },
-  { key: 'diagnosis', label: 'AI辅助诊断', icon: '诊', path: '/doctor/diagnosis' },
+  { key: 'diagnosis', label: '影像诊断', icon: '诊', path: '/doctor/diagnosis' },
   { key: 'records', label: '我的病例', icon: '历', path: '/doctor/records' },
   { key: 'referral', label: '分级诊疗', icon: '协', path: '/doctor/referral' }
 ]
@@ -327,6 +353,26 @@ const activeSideMenu = computed(() => {
   font-size: 12px;
   color: #7d97b4;
   white-space: nowrap;
+}
+
+.logout-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid #d8e5f2;
+  background: #ffffff;
+  color: #5c7698;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.logout-btn:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .page-shell {

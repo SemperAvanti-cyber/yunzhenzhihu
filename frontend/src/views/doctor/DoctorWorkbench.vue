@@ -1,9 +1,28 @@
 <template>
   <div class="clinical-page">
     <section class="hero-card">
-      <div class="hero-kicker">临床总览</div>
-      <h1>今日工作概览</h1>
-      <div class="hero-meta">门诊诊疗 · 影像复核 · 转诊协同</div>
+      <div class="hero-top">
+        <div>
+          <div class="hero-kicker">临床总览</div>
+          <h1>工作概览</h1>
+          <div class="hero-meta">门诊诊疗 · 影像复核 · 转诊协同</div>
+        </div>
+
+        <div class="hero-actions">
+          <button class="hero-action-btn primary" @click="goToDiagnosis">
+            进入影像诊断
+          </button>
+          <button class="hero-action-btn" @click="goToRecords">
+            查看我的病例
+          </button>
+          <button class="hero-action-btn" @click="goToReferral">
+            发起分级诊疗
+          </button>
+        </div>
+      </div>
+
+      <div v-if="loading" class="page-tip">正在加载工作台数据...</div>
+      <div v-else-if="error" class="page-tip error">{{ error }}</div>
     </section>
 
     <section class="metric-grid">
@@ -21,11 +40,16 @@
       <div class="panel-card">
         <div class="panel-head">
           <span>待处理队列</span>
-          <span class="panel-link">按优先级</span>
+          <button class="panel-link-btn" @click="sortQueueByPriority">按优先级</button>
         </div>
 
-        <div class="queue-list">
-          <div v-for="item in queueList" :key="item.title" class="queue-item">
+        <div v-if="queueList.length" class="queue-list">
+          <div
+              v-for="item in queueList"
+              :key="item.id"
+              class="queue-item interactive-card"
+              @click="handleQueueClick(item)"
+          >
             <div class="queue-main">
               <div :class="['risk-tag', item.riskClass]">{{ item.risk }}</div>
               <div>
@@ -40,16 +64,22 @@
             </div>
           </div>
         </div>
+        <div v-else class="empty-text">当前暂无待处理任务</div>
       </div>
 
       <div class="panel-card">
         <div class="panel-head">
           <span>最近动态</span>
-          <span class="panel-link">临床相关</span>
+          <button class="panel-link-btn" @click="goToRecords">临床相关</button>
         </div>
 
-        <div class="update-list">
-          <div v-for="item in updates" :key="item.title" class="update-item">
+        <div v-if="updates.length" class="update-list">
+          <div
+              v-for="item in updates"
+              :key="item.id"
+              class="update-item interactive-card"
+              @click="handleUpdateClick(item)"
+          >
             <div class="update-top">
               <span :class="['update-tag', item.tagClass]">{{ item.tag }}</span>
               <span class="update-time">{{ item.time }}</span>
@@ -58,27 +88,28 @@
             <div class="update-meta">{{ item.meta }}</div>
           </div>
         </div>
+        <div v-else class="empty-text">暂无最近动态</div>
       </div>
     </section>
 
     <section class="panel-card">
       <div class="panel-head">
         <span>重点关注</span>
-        <span class="panel-link">当前状态</span>
+        <button class="panel-link-btn" @click="goToReferral">当前状态</button>
       </div>
 
       <div class="focus-grid">
-        <div class="focus-card">
+        <div class="focus-card interactive-card" @click="goToReferral('high-risk')">
           <div class="focus-title">高危病例待接收</div>
-          <div class="focus-value">1 例</div>
+          <div class="focus-value">{{ focusStats.highRiskPending }}</div>
         </div>
-        <div class="focus-card">
+        <div class="focus-card interactive-card" @click="goToRecords('follow-up')">
           <div class="focus-title">异常随访提醒</div>
-          <div class="focus-value">2 例</div>
+          <div class="focus-value">{{ focusStats.followUpReminders }}</div>
         </div>
-        <div class="focus-card">
+        <div class="focus-card interactive-card" @click="goToReferral('callback')">
           <div class="focus-title">待回传复核结果</div>
-          <div class="focus-value">4 例</div>
+          <div class="focus-value">{{ focusStats.pendingCallbacks }}</div>
         </div>
       </div>
     </section>
@@ -86,87 +117,111 @@
 </template>
 
 <script setup>
-const metrics = [
-  {
-    label: '今日复核',
-    value: '26',
-    trend: '+4',
-    type: 'up',
-    note: '待医生确认'
-  },
-  {
-    label: '已完成转诊',
-    value: '08',
-    trend: '+2',
-    type: 'up',
-    note: '高危优先处理'
-  },
-  {
-    label: 'AI-医生一致率',
-    value: '91.8%',
-    trend: '+1.6%',
-    type: 'up',
-    note: '较上周提升'
-  },
-  {
-    label: '高危响应率',
-    value: '96.2%',
-    trend: '+3.1%',
-    type: 'up',
-    note: '15分钟内处理'
-  }
-]
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { getWorkbenchApi } from '../../api/clinical'
 
-const queueList = [
-  {
-    risk: '待复核',
-    riskClass: 'warning',
-    title: '左前臂色素病灶复核',
-    meta: '基层医院转入 · 皮肤镜 + 普通照片 · P-2026-8831',
-    rightTop: '恶性概率 44%',
-    rightBottom: '待医生复核'
-  },
-  {
-    risk: '待转诊',
-    riskClass: 'danger',
-    title: '疑似黑色素瘤高危病例',
-    meta: '上级医院待接收 · 已生成转诊单 · P-2026-9014',
-    rightTop: '恶性概率 81%',
-    rightBottom: '距自动升级 09:41'
-  },
-  {
-    risk: '异常随访',
-    riskClass: 'neutral',
-    title: 'AI 标记异常随访结果',
-    meta: '患者 App 随访异常 · 系统自动推入队列',
-    rightTop: '异常分值 72',
-    rightBottom: '建议查看病历时间轴'
-  }
-]
+const router = useRouter()
 
-const updates = [
-  {
-    tag: '病例',
-    tagClass: 'blue',
-    title: '病例库新增 2 例回传结果',
-    meta: '上级医院已完成复核并回传意见',
-    time: '09:12'
-  },
-  {
-    tag: '转诊',
-    tagClass: 'orange',
-    title: '1 例高危病例已进入上转流程',
-    meta: '等待上级医院接收',
-    time: '10:26'
-  },
-  {
-    tag: '会诊',
-    tagClass: 'green',
-    title: '远程会诊意见已返回',
-    meta: '专家中心完成复核建议，可查看回传结果',
-    time: '11:03'
+const loading = ref(false)
+const error = ref('')
+const metrics = ref([])
+const queueList = ref([])
+const updates = ref([])
+const focusStats = ref({
+  highRiskPending: '0 例',
+  followUpReminders: '0 例',
+  pendingCallbacks: '0 例'
+})
+
+async function fetchWorkbench() {
+  try {
+    loading.value = true
+    error.value = ''
+
+    const data = await getWorkbenchApi()
+    metrics.value = data.metrics || []
+    queueList.value = data.queueList || []
+    updates.value = data.updates || []
+    focusStats.value = data.focusStats || {
+      highRiskPending: '0 例',
+      followUpReminders: '0 例',
+      pendingCallbacks: '0 例'
+    }
+  } catch (err) {
+    error.value = err.message || '工作台数据加载失败'
+  } finally {
+    loading.value = false
   }
-]
+}
+
+function goToDiagnosis(caseId) {
+  router.push({
+    path: '/doctor/diagnosis',
+    query: caseId ? { caseId } : {}
+  })
+}
+
+function goToRecords(tab) {
+  router.push({
+    path: '/doctor/records',
+    query: tab ? { tab } : {}
+  })
+}
+
+function goToReferral(tab) {
+  router.push({
+    path: '/doctor/referral',
+    query: tab ? { tab } : {}
+  })
+}
+
+function handleQueueClick(item) {
+  if (item.target === 'diagnosis') {
+    goToDiagnosis(item.caseId)
+    return
+  }
+
+  if (item.target === 'referral') {
+    router.push({
+      path: '/doctor/referral',
+      query: {
+        caseId: item.caseId,
+        referralCode: item.referralCode || '',
+        tab: 'queue'
+      }
+    })
+    return
+  }
+
+  goToRecords('follow-up')
+}
+
+function handleUpdateClick(item) {
+  if (item.target === 'referral') {
+    router.push({
+      path: '/doctor/referral',
+      query: {
+        referralCode: item.referralCode || '',
+        tab: 'updates'
+      }
+    })
+    return
+  }
+
+  if (item.target === 'diagnosis') {
+    goToDiagnosis(item.caseId)
+    return
+  }
+
+  goToRecords()
+}
+
+function sortQueueByPriority() {
+  queueList.value = [...queueList.value].sort((a, b) => (b.priority || 0) - (a.priority || 0))
+}
+
+onMounted(fetchWorkbench)
 </script>
 
 <style scoped>
@@ -193,6 +248,13 @@ const updates = [
       linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .hero-kicker {
   font-size: 12px;
   color: #7c95b1;
@@ -211,7 +273,9 @@ const updates = [
 .queue-deadline,
 .panel-link,
 .update-meta,
-.update-time {
+.update-time,
+.page-tip,
+.empty-text {
   font-size: 12px;
   color: #7892b0;
   line-height: 1.7;
@@ -219,6 +283,38 @@ const updates = [
 
 .hero-meta {
   margin-top: 10px;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hero-action-btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid #d8e5f2;
+  background: #ffffff;
+  color: #365a7f;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hero-action-btn.primary {
+  border: none;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+}
+
+.page-tip {
+  margin-top: 12px;
+}
+
+.page-tip.error {
+  color: #d83b3b;
 }
 
 .metric-grid {
@@ -256,6 +352,11 @@ const updates = [
   color: #14906a;
 }
 
+.metric-trend.warning {
+  background: #fff5df;
+  color: #c98912;
+}
+
 .metric-value {
   margin-top: 12px;
   font-size: 32px;
@@ -282,6 +383,14 @@ const updates = [
   font-weight: 700;
 }
 
+.panel-link-btn {
+  border: none;
+  background: transparent;
+  color: #7892b0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .queue-list,
 .update-list {
   display: flex;
@@ -295,6 +404,17 @@ const updates = [
   border-radius: 16px;
   background: #f9fcff;
   border: 1px solid #e3edf7;
+}
+
+.interactive-card {
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.interactive-card:hover {
+  transform: translateY(-2px);
+  border-color: #bfd8f8;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
 }
 
 .queue-item {
@@ -396,11 +516,18 @@ const updates = [
   color: #17385f;
 }
 
+.empty-text {
+  padding: 16px 4px 8px;
+}
+
 @media (max-width: 1360px) {
+  .hero-top,
   .metric-grid,
   .content-grid,
   .focus-grid {
     grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

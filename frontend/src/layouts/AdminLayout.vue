@@ -4,13 +4,13 @@
       <div class="brand-wrap">
         <div class="brand-logo">管</div>
         <div class="brand-text">
-          <div class="brand-title">一肤当关 · 管理员后台</div>
-          <div class="brand-subtitle">Administration Console</div>
+          <div class="brand-title">云诊智护 · 管理员后台</div>
+          <div class="brand-subtitle">Administration Console · {{ activeRoleLabel }}</div>
         </div>
       </div>
 
       <nav class="main-nav">
-        <button class="main-nav-item active">管理员后台</button>
+        <button class="main-nav-item active">管理员控制台</button>
       </nav>
 
       <div class="top-actions">
@@ -18,17 +18,19 @@
 
         <div class="search-box">
           <span class="search-icon">⌕</span>
-          <input placeholder="搜索账号 / 审批单 / 审计记录" />
+          <input :placeholder="searchPlaceholder" />
         </div>
 
         <div class="user-box">
-          <div class="user-avatar">王</div>
+          <div class="user-avatar">{{ avatarText }}</div>
           <div class="user-inline">
-            <span class="user-name">王管理员</span>
+            <span class="user-name">{{ displayName }}</span>
             <span class="user-divider">·</span>
             <span class="user-role">{{ activeRoleLabel }}</span>
           </div>
         </div>
+
+        <button type="button" class="logout-btn" @click="handleLogout">退出</button>
       </div>
     </header>
 
@@ -43,7 +45,7 @@
                 :key="item.key"
                 class="sidebar-item"
                 :class="{ active: item.key === activeMenuKey }"
-                @click="router.push(item.path)"
+                @click="go(item.path)"
             >
               <div class="sidebar-item-left">
                 <div class="sidebar-icon">{{ item.icon }}</div>
@@ -69,9 +71,23 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getAuthUser, logout as doLogout } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+
+const authUser = computed(() => getAuthUser())
+
+const displayName = computed(() => authUser.value?.realName || '管理员')
+
+const avatarText = computed(() => {
+  const n = String(displayName.value || '').trim()
+  return n ? n.slice(0, 1) : '管'
+})
+
+function handleLogout() {
+  doLogout(router)
+}
 
 const hospitalMenus = [
   { key: 'dashboard', label: '后台总览', icon: '总', path: '/admin/dashboard' },
@@ -90,7 +106,17 @@ const securityMenus = [
   { key: 'security', label: '系统安全', icon: '安', path: '/admin/security' }
 ]
 
+const queryScope = computed(() => {
+  const scope = route.query.scope
+  if (scope === 'research' || scope === 'security' || scope === 'hospital') {
+    return scope
+  }
+  return null
+})
+
 const activeRoleKey = computed(() => {
+  if (queryScope.value) return queryScope.value
+
   const path = route.path
   if (path.includes('/admin/permissions')) return 'research'
   if (path.includes('/admin/audit') || path.includes('/admin/security')) return 'security'
@@ -101,6 +127,12 @@ const activeRoleLabel = computed(() => {
   if (activeRoleKey.value === 'research') return '科研合规管理员'
   if (activeRoleKey.value === 'security') return '安全审计管理员'
   return '医院管理员'
+})
+
+const searchPlaceholder = computed(() => {
+  if (activeRoleKey.value === 'research') return '搜索项目 / 伦理 / 导出审批'
+  if (activeRoleKey.value === 'security') return '搜索日志 / 导出 / 安全事件'
+  return '搜索账号 / 科室 / 会诊审批'
 })
 
 const currentMenus = computed(() => {
@@ -118,6 +150,15 @@ const activeMenuKey = computed(() => {
   if (path.includes('/admin/security')) return 'security'
   return 'dashboard'
 })
+
+function go(path) {
+  router.push({
+    path,
+    query: {
+      scope: activeRoleKey.value
+    }
+  })
+}
 </script>
 
 <style scoped>
@@ -133,7 +174,7 @@ const activeMenuKey = computed(() => {
 .topbar {
   height: 78px;
   display: grid;
-  grid-template-columns: 420px 1fr 520px;
+  grid-template-columns: 420px 1fr 540px;
   align-items: center;
   gap: 20px;
   padding: 0 28px;
@@ -227,7 +268,7 @@ const activeMenuKey = computed(() => {
   gap: 10px;
   height: 40px;
   padding: 0 14px;
-  min-width: 230px;
+  min-width: 250px;
   background: #ffffff;
   border: 1px solid #d8e5f2;
   border-radius: 12px;
@@ -290,6 +331,24 @@ const activeMenuKey = computed(() => {
 .user-role {
   font-size: 12px;
   color: #7d97b4;
+}
+
+.logout-btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid #d8e5f2;
+  background: #ffffff;
+  color: #275890;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.logout-btn:hover {
+  background: #f0f6ff;
+  border-color: #bfd8f8;
 }
 
 .page-shell {

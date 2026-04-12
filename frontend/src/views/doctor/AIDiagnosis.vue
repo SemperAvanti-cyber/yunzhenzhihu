@@ -1,51 +1,111 @@
 <template>
-  <div class="page-shell">
-    <div class="page-header">
+  <div class="diagnosis-page">
+    <div class="page-head">
       <div>
-        <div class="page-title">影像诊断</div>
-        <div class="page-subtitle">
-          调阅影像、查看辅助分析、完成医生复核与判断修正。
-        </div>
+        <h1>影像诊断</h1>
+        <div class="page-subtitle">调阅影像、查看辅助分析、完成医生复核与判断修正</div>
       </div>
-      <div class="header-actions">
-        <button class="ghost-btn">导出辅助报告</button>
-        <button class="primary-btn">提交复核意见</button>
+
+      <div class="head-actions">
+        <button class="ghost-btn" @click="handleExport" :disabled="!pageData.caseInfo.caseId">
+          导出辅助报告
+        </button>
+        <button class="primary-btn" @click="handleSubmitReview" :disabled="submitting || !pageData.caseInfo.caseId">
+          {{ submitting ? '提交中...' : '提交复核意见' }}
+        </button>
       </div>
     </div>
 
-    <section class="diagnosis-grid">
+    <div v-if="loading" class="page-tip">正在加载影像诊断数据...</div>
+    <div v-else-if="error" class="page-tip error">{{ error }}</div>
+
+    <section v-else class="content-grid">
+      <!-- 左栏 -->
       <div class="panel-card">
         <div class="panel-head">
           <span>影像调阅</span>
           <span class="panel-link">院内同步</span>
         </div>
 
-        <div class="source-box">
-          <div class="source-item">
+        <div class="info-list">
+          <div class="info-item">
             <label>影像来源</label>
-            <div class="source-value">PACS 自动同步</div>
+            <div>{{ pageData.caseInfo.sourceLabel }}</div>
           </div>
-          <div class="source-item">
+          <div class="info-item">
             <label>病例编号</label>
-            <div class="source-value">Patient_ID: P-2026-8831</div>
+            <div>{{ pageData.caseInfo.caseCode }}</div>
           </div>
-          <div class="source-item">
+          <div class="info-item">
+            <label>患者编号</label>
+            <div>{{ pageData.caseInfo.patientCode }}</div>
+          </div>
+          <div class="info-item">
             <label>模态识别</label>
-            <div class="source-value">皮肤镜图像</div>
+            <div>{{ pageData.caseInfo.modalityLabel }}</div>
           </div>
-          <div class="source-item">
+          <div class="info-item">
+            <label>病灶部位</label>
+            <div>{{ pageData.caseInfo.bodyPart }}</div>
+          </div>
+          <div class="info-item">
             <label>历史对比</label>
-            <div class="source-value">2026-03-18 / 2026-02-22</div>
+            <div>{{ pageData.caseInfo.historyLabel }}</div>
           </div>
         </div>
 
-        <div class="timeline-strip">
-          <div class="timeline-chip active">本次影像</div>
-          <div class="timeline-chip">03-18 随访</div>
-          <div class="timeline-chip">02-22 首次建档</div>
+        <div class="timeline-title">病例时间轴</div>
+        <div class="timeline-list">
+          <button
+              v-for="item in pageData.timeline"
+              :key="item.id"
+              class="timeline-chip"
+              :class="{ active: item.active }"
+              @click="handleSwitchImage(item.id)"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+
+        <div class="feature-panel">
+          <div class="feature-title">专业特征摘要</div>
+
+          <div class="feature-group">
+            <div class="feature-group-title">ABCDE</div>
+            <div class="feature-grid">
+              <span>对称性：{{ pageData.aiReport.featureJson?.abcde?.asymmetry }}</span>
+              <span>边界：{{ pageData.aiReport.featureJson?.abcde?.border }}</span>
+              <span>颜色：{{ pageData.aiReport.featureJson?.abcde?.color }}</span>
+              <span>直径：{{ pageData.aiReport.featureJson?.abcde?.diameter }}</span>
+              <span>演变：{{ pageData.aiReport.featureJson?.abcde?.evolution }}</span>
+            </div>
+          </div>
+
+          <div class="feature-group">
+            <div class="feature-group-title">皮肤镜特征</div>
+            <div class="tag-row">
+              <span
+                  v-for="item in pageData.aiReport.featureJson?.dermoscopy || []"
+                  :key="item"
+                  class="tag-chip"
+              >
+                {{ item }}
+              </span>
+            </div>
+          </div>
+
+          <div class="feature-group">
+            <div class="feature-group-title">质控结果</div>
+            <div class="feature-grid">
+              <span>清晰度：{{ pageData.aiReport.featureJson?.quality?.clarity }}</span>
+              <span>曝光：{{ pageData.aiReport.featureJson?.quality?.exposure }}</span>
+              <span>构图：{{ pageData.aiReport.featureJson?.quality?.framing }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
+      <!-- 中栏 -->
       <div class="panel-card">
         <div class="panel-head">
           <span>辅助分析区</span>
@@ -53,23 +113,67 @@
         </div>
 
         <div class="viewer-box">
-          <div class="scan-surface">
-            <div class="scan-image"></div>
-            <div class="heat heat-a"></div>
-            <div class="heat heat-b"></div>
-            <div class="lesion-box box-a"><span>病灶A：边缘不规则</span></div>
-            <div class="lesion-box box-b"><span>病灶B：色素不均</span></div>
-          </div>
+          <img
+              class="base-image"
+              :src="getBackendFileUrl(pageData.currentImage.imageUrl)"
+              alt="原始影像"
+          />
 
-          <div class="viewer-tools">
-            <span>透明度 68%</span>
-            <span>直径测量 6.8mm</span>
-            <span>历史变化：加重</span>
-            <span>模型：CR-Conformer v1.2</span>
+          <img
+              v-if="showHeatmap && pageData.currentImage.heatmapUrl"
+              class="heatmap-image"
+              :src="getBackendFileUrl(pageData.currentImage.heatmapUrl)"
+              alt="热力图"
+              :style="{ opacity: pageData.currentImage.opacity }"
+          />
+
+          <div v-if="showBoxes">
+            <div
+                v-for="box in pageData.aiReport.lesionBoxes"
+                :key="box.label"
+                class="lesion-box"
+                :style="getBoxStyle(box)"
+            >
+              <span class="box-label">{{ box.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tool-row">
+          <button class="tool-chip" :class="{ active: showHeatmap }" @click="showHeatmap = !showHeatmap">
+            热力图
+          </button>
+          <button class="tool-chip" :class="{ active: showBoxes }" @click="showBoxes = !showBoxes">
+            病灶框
+          </button>
+          <button class="tool-chip passive">
+            模型：{{ pageData.aiReport.metrics.modelVersion }}
+          </button>
+          <button class="tool-chip passive">
+            直径：{{ pageData.aiReport.metrics.diameter }}
+          </button>
+          <button class="tool-chip passive">
+            演变：{{ pageData.aiReport.metrics.evolution }}
+          </button>
+        </div>
+
+        <div class="compare-grid">
+          <div class="compare-card">
+            <div class="compare-title">历史影像</div>
+            <div class="compare-image-wrap">
+              <img :src="getBackendFileUrl(pageData.compare.historyImageUrl)" alt="历史影像" />
+            </div>
+          </div>
+          <div class="compare-card">
+            <div class="compare-title">本次影像</div>
+            <div class="compare-image-wrap">
+              <img :src="getBackendFileUrl(pageData.compare.currentImageUrl)" alt="本次影像" />
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 右栏 -->
       <div class="panel-card">
         <div class="panel-head">
           <span>辅助报告</span>
@@ -78,41 +182,59 @@
 
         <div class="risk-box">
           <div class="risk-label">恶性概率</div>
-          <div class="risk-value">67%</div>
-          <div class="risk-note">30%～70% 进入医生复核</div>
+          <div class="risk-value">{{ pageData.aiReport.riskText }}</div>
+          <div class="risk-note">{{ pageData.aiReport.reviewRuleText }}</div>
         </div>
 
-        <div class="top3-box">
-          <div class="top3-row"><span>疑似黑色素瘤</span><span>67%</span></div>
-          <div class="progress"><div class="fill fill-red" style="width: 67%"></div></div>
-
-          <div class="top3-row"><span>色素痣异变</span><span>19%</span></div>
-          <div class="progress"><div class="fill fill-gold" style="width: 19%"></div></div>
-
-          <div class="top3-row"><span>炎症性色素沉着</span><span>14%</span></div>
-          <div class="progress"><div class="fill fill-blue" style="width: 14%"></div></div>
-        </div>
-
-        <div class="compare-box">
-          <div class="compare-title">医生修正后</div>
-          <div class="compare-row">
-            <span>当前判断</span>
-            <strong>高度怀疑黑色素瘤</strong>
-          </div>
-          <div class="compare-row">
-            <span>处理建议</span>
-            <strong>建议上转进一步评估</strong>
+        <div class="top3-list">
+          <div v-for="item in pageData.aiReport.top3" :key="item.name" class="top3-item">
+            <div class="top3-head">
+              <span>{{ item.name }}</span>
+              <span>{{ Math.round(item.prob * 100) }}%</span>
+            </div>
+            <div class="top3-bar">
+              <i :class="['bar-inner', item.color]" :style="{ width: `${Math.round(item.prob * 100)}%` }"></i>
+            </div>
           </div>
         </div>
 
-        <div class="explain-box">
-          检测到病灶边缘不规则、色素分布不均，建议结合既往影像变化与临床病史进一步复核。
+        <div class="summary-box">
+          {{ pageData.aiReport.summary }}
         </div>
 
-        <div class="action-stack">
-          <button class="primary-btn block-btn">确认辅助结论</button>
-          <button class="secondary-btn block-btn">修正判断</button>
-          <button class="warning-btn block-btn">发起上转 / 会诊</button>
+        <div class="doctor-box">
+          <div class="doctor-box-title">医生修正后</div>
+
+          <div class="form-item">
+            <label>当前判断</label>
+            <textarea v-model="doctorForm.conclusion" rows="3"></textarea>
+          </div>
+
+          <div class="form-item">
+            <label>处理建议</label>
+            <textarea v-model="doctorForm.treatmentPlan" rows="3"></textarea>
+          </div>
+
+          <div class="form-item">
+            <label>随访 / 护理建议</label>
+            <textarea v-model="doctorForm.suggestion" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="action-column">
+          <button class="primary-btn full" @click="handleConfirmAi" :disabled="submitting">
+            确认辅助结论
+          </button>
+          <button class="ghost-btn full" @click="handleRevise" :disabled="submitting">
+            修正判断
+          </button>
+          <button
+              class="warn-btn full"
+              @click="goToReferral"
+              :disabled="!pageData.actions.canRefer"
+          >
+            发起上转 / 会诊
+          </button>
         </div>
       </div>
     </section>
@@ -120,47 +242,229 @@
 </template>
 
 <script setup>
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getMyRecordsBoardApi } from '../../api/cases'
+import {
+  confirmAiDiagnosisApi,
+  getBackendFileUrl,
+  getDiagnosisExportUrl,
+  getDiagnosisWorkspaceApi,
+  reviseDiagnosisApi
+} from '../../api/diagnosis'
+
+const route = useRoute()
+const router = useRouter()
+
+const loading = ref(false)
+const submitting = ref(false)
+const error = ref('')
+const showHeatmap = ref(true)
+const showBoxes = ref(true)
+
+const pageData = ref({
+  caseInfo: {},
+  timeline: [],
+  currentImage: {},
+  aiReport: {
+    top3: [],
+    lesionBoxes: [],
+    metrics: {},
+    featureJson: {}
+  },
+  doctorReview: {},
+  compare: {},
+  actions: {}
+})
+
+const doctorForm = reactive({
+  conclusion: '',
+  treatmentPlan: '',
+  suggestion: ''
+})
+
+function syncDoctorForm() {
+  doctorForm.conclusion = pageData.value.doctorReview.conclusion || ''
+  doctorForm.treatmentPlan = pageData.value.doctorReview.treatmentPlan || ''
+  doctorForm.suggestion = pageData.value.doctorReview.suggestion || ''
+}
+
+async function fetchWorkspace() {
+  try {
+    loading.value = true
+    error.value = ''
+
+    let caseId = route.query.caseId
+    let imageId = route.query.imageId
+
+    if (!caseId) {
+      const board = await getMyRecordsBoardApi({ status: 'ALL' })
+      const cid = board?.selectedCase?.caseId
+      if (!cid) {
+        error.value = '暂无可用病例，请先在「我的病例」创建或选择病例后再进入影像诊断'
+        return
+      }
+      const firstImg = board.selectedCase?.images?.[0]
+      caseId = String(cid)
+      imageId = imageId || (firstImg?.imageId != null ? String(firstImg.imageId) : undefined)
+      await router.replace({
+        path: '/doctor/diagnosis',
+        query: {
+          ...route.query,
+          caseId,
+          ...(imageId ? { imageId } : {})
+        }
+      })
+    }
+
+    const data = await getDiagnosisWorkspaceApi({
+      caseId,
+      imageId
+    })
+
+    pageData.value = data
+    syncDoctorForm()
+  } catch (err) {
+    error.value = err.message || '影像诊断数据加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function getBoxStyle(box) {
+  return {
+    left: `${box.x}%`,
+    top: `${box.y}%`,
+    width: `${box.w}%`,
+    height: `${box.h}%`
+  }
+}
+
+async function handleSwitchImage(imageId) {
+  await router.replace({
+    path: '/doctor/diagnosis',
+    query: {
+      ...route.query,
+      imageId
+    }
+  })
+
+  await fetchWorkspace()
+}
+
+async function handleConfirmAi() {
+  try {
+    submitting.value = true
+    await confirmAiDiagnosisApi(pageData.value.caseInfo.caseId, {
+      conclusion: doctorForm.conclusion,
+      treatmentPlan: doctorForm.treatmentPlan,
+      suggestion: doctorForm.suggestion
+    })
+    window.alert('已确认辅助结论')
+    await fetchWorkspace()
+  } catch (err) {
+    window.alert(err.message || '提交失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function handleRevise() {
+  try {
+    submitting.value = true
+    await reviseDiagnosisApi(pageData.value.caseInfo.caseId, {
+      conclusion: doctorForm.conclusion,
+      treatmentPlan: doctorForm.treatmentPlan,
+      suggestion: doctorForm.suggestion
+    })
+    window.alert('医生修正判断已保存')
+    await fetchWorkspace()
+  } catch (err) {
+    window.alert(err.message || '提交失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function handleSubmitReview() {
+  await handleRevise()
+}
+
+function handleExport() {
+  if (!pageData.value.caseInfo.caseId) return
+  window.open(getDiagnosisExportUrl(pageData.value.caseInfo.caseId), '_blank')
+}
+
+function goToReferral() {
+  router.push({
+    path: '/doctor/referral',
+    query: {
+      caseId: pageData.value.caseInfo.caseId
+    }
+  })
+}
+
+onMounted(fetchWorkspace)
 </script>
 
 <style scoped>
-.page-shell {
+.diagnosis-page {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.page-header {
+.page-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
-.page-title {
+.page-head h1 {
+  margin: 0;
   font-size: 28px;
   font-weight: 800;
   color: #17385f;
 }
 
-.page-subtitle {
-  margin-top: 7px;
-  font-size: 13px;
-  color: #748ead;
-  line-height: 1.7;
+.page-subtitle,
+.panel-link,
+.page-tip,
+.risk-note,
+.summary-box,
+.info-item label,
+.form-item label,
+.feature-group-title,
+.timeline-title,
+.compare-title {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #7892b0;
 }
 
-.header-actions {
+.page-subtitle {
+  margin-top: 6px;
+}
+
+.page-tip.error {
+  color: #d83b3b;
+}
+
+.head-actions,
+.tool-row,
+.action-column {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .primary-btn,
 .ghost-btn,
-.secondary-btn,
-.warning-btn {
-  height: 44px;
-  padding: 0 18px;
-  border-radius: 14px;
+.warn-btn {
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
@@ -171,32 +475,28 @@
   border: none;
   color: #fff;
   background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
 }
 
 .ghost-btn {
   border: 1px solid #d8e5f2;
+  background: #fff;
   color: #365a7f;
-  background: #ffffff;
 }
 
-.secondary-btn {
-  border: 1px solid #bfd6f7;
-  color: #1d5ea9;
-  background: #ffffff;
-}
-
-.warning-btn {
+.warn-btn {
   border: none;
   color: #fff;
   background: linear-gradient(135deg, #f59e0b, #fbbf24);
-  box-shadow: 0 10px 24px rgba(245, 158, 11, 0.18);
 }
 
-.diagnosis-grid {
+.full {
+  width: 100%;
+}
+
+.content-grid {
   display: grid;
-  grid-template-columns: 0.95fr 1.3fr 0.85fr;
-  gap: 18px;
+  grid-template-columns: 0.8fr 1.05fr 0.82fr;
+  gap: 16px;
 }
 
 .panel-card {
@@ -204,272 +504,280 @@
   border: 1px solid #dce8f4;
   border-radius: 22px;
   box-shadow: 0 10px 30px rgba(17, 56, 102, 0.05);
-  padding: 20px;
+  padding: 18px;
 }
 
 .panel-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-bottom: 14px;
-  margin-bottom: 14px;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
   border-bottom: 1px solid #e6eef7;
-  color: #17385f;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
+  color: #17385f;
 }
 
-.panel-link,
-.risk-note,
-.explain-box,
-.source-value {
-  font-size: 12px;
-  color: #7892b0;
-  line-height: 1.7;
-}
-
-.source-box {
-  display: grid;
+.info-list {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.source-item {
+.info-item,
+.compare-card,
+.risk-box,
+.summary-box,
+.feature-panel,
+.doctor-box,
+.form-item {
   padding: 14px;
   border-radius: 16px;
   background: #f9fcff;
   border: 1px solid #e3edf7;
 }
 
-.source-item label,
-.risk-label {
-  display: block;
-  font-size: 12px;
-  color: #7a93af;
-  margin-bottom: 8px;
+.info-item div,
+.feature-grid span,
+.summary-box,
+.form-item textarea {
+  font-size: 14px;
+  color: #1d466f;
+  line-height: 1.7;
 }
 
-.timeline-strip {
+.timeline-title {
+  margin-top: 16px;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.timeline-list {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
+}
+
+.timeline-chip,
+.tool-chip {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #d8e5f2;
+  background: #f7fbff;
+  color: #5f7c98;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.timeline-chip.active,
+.tool-chip.active {
+  background: #edf6ff;
+  color: #2a70b8;
+  border-color: #bfd8f8;
+}
+
+.tool-chip.passive {
+  cursor: default;
+}
+
+.feature-panel {
   margin-top: 16px;
 }
 
-.timeline-chip {
-  padding: 8px 12px;
+.feature-title,
+.doctor-box-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d466f;
+  margin-bottom: 10px;
+}
+
+.feature-group + .feature-group {
+  margin-top: 14px;
+}
+
+.feature-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  padding: 5px 10px;
   border-radius: 999px;
-  background: #f3f8fd;
-  border: 1px solid #dce8f4;
-  color: #4d6d93;
+  background: #edf6ff;
+  color: #2a70b8;
   font-size: 12px;
 }
 
-.timeline-chip.active {
-  background: #eaf3ff;
-  color: #1e5ba6;
-  border-color: #b9d7fb;
-}
-
 .viewer-box {
-  border-radius: 18px;
-  background: #f8fbff;
-  border: 1px solid #e3edf7;
-  padding: 16px;
-}
-
-.scan-surface {
   position: relative;
-  min-height: 470px;
-  border-radius: 18px;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 22px;
   overflow: hidden;
-  background: linear-gradient(135deg, #e2b79d, #8a5d54 42%, #4e3c3d 100%);
+  background: #eef4fa;
+  border: 1px solid #dce8f4;
 }
 
-.scan-image {
+.base-image,
+.heatmap-image {
   position: absolute;
   inset: 0;
-  background:
-      radial-gradient(circle at 40% 36%, rgba(255, 175, 150, 0.72), rgba(144, 95, 78, 0.28) 18%, transparent 26%),
-      radial-gradient(circle at 62% 58%, rgba(255, 212, 187, 0.4), rgba(118, 78, 67, 0.2) 22%, transparent 30%),
-      linear-gradient(135deg, rgba(181, 125, 101, 0.55), rgba(95, 61, 53, 0.36), rgba(38, 28, 30, 0.58));
-}
-
-.heat {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(18px);
-  opacity: 0.75;
-}
-
-.heat-a {
-  width: 120px;
-  height: 120px;
-  left: 39%;
-  top: 31%;
-  background: radial-gradient(circle, rgba(255, 59, 48, 0.78), rgba(255, 153, 0, 0.34), transparent 72%);
-}
-
-.heat-b {
-  width: 90px;
-  height: 90px;
-  left: 56%;
-  top: 52%;
-  background: radial-gradient(circle, rgba(250, 82, 82, 0.7), rgba(255, 179, 71, 0.28), transparent 72%);
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .lesion-box {
   position: absolute;
-  border: 2px solid #facc15;
-  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.14);
+  border: 2px solid #ffd84a;
+  box-sizing: border-box;
 }
 
-.lesion-box span {
+.box-label {
   position: absolute;
-  top: -30px;
   left: 0;
-  padding: 6px 10px;
-  border-radius: 10px;
-  font-size: 12px;
-  color: #101828;
-  background: #facc15;
+  top: -30px;
   white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: #ffd326;
+  color: #403300;
+  font-size: 12px;
   font-weight: 700;
 }
 
-.box-a {
-  width: 112px;
-  height: 118px;
-  left: 36%;
-  top: 29%;
-}
-
-.box-b {
-  width: 88px;
-  height: 84px;
-  left: 55%;
-  top: 51%;
-}
-
-.viewer-tools {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.tool-row {
   margin-top: 14px;
 }
 
-.viewer-tools span {
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  color: #4d6d93;
-  background: #f3f8fd;
-  border: 1px solid #dce8f4;
+.compare-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.compare-image-wrap {
+  margin-top: 12px;
+  height: 220px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #eef4fa;
+  border: 1px solid #dfe8f2;
+}
+
+.compare-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .risk-box {
-  padding: 16px;
-  border-radius: 18px;
-  background: #f8fbff;
-  border: 1px solid #e3edf7;
   text-align: center;
+}
+
+.risk-label {
+  color: #7a93af;
 }
 
 .risk-value {
   margin-top: 8px;
-  font-size: 58px;
-  line-height: 1;
-  font-weight: 800;
-  color: #d83b3b;
+  font-size: 48px;
+  font-weight: 900;
+  color: #df4545;
 }
 
-.top3-box {
-  margin-top: 16px;
+.top3-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.top3-row {
+.top3-item {
+  padding: 4px 0;
+}
+
+.top3-head {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  color: #21466f;
+  color: #1d466f;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
-.progress {
+.top3-bar {
+  width: 100%;
   height: 8px;
   border-radius: 999px;
-  background: #eaf1f8;
+  background: #e8eef6;
   overflow: hidden;
-  margin: 6px 0 12px;
 }
 
-.fill {
+.bar-inner {
+  display: block;
   height: 100%;
   border-radius: inherit;
 }
 
-.fill-red {
-  background: linear-gradient(90deg, #ef4444, #fb7185);
+.bar-inner.red {
+  background: #ef5a5a;
 }
 
-.fill-gold {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+.bar-inner.gold {
+  background: #f5b722;
 }
 
-.fill-blue {
-  background: linear-gradient(90deg, #2563eb, #60a5fa);
+.bar-inner.blue {
+  background: #4d89e6;
 }
 
-.compare-box,
-.explain-box {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 16px;
-  background: #f8fbff;
-  border: 1px solid #e3edf7;
+.summary-box {
+  margin-top: 14px;
 }
 
-.compare-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #17385f;
-  margin-bottom: 10px;
+.doctor-box {
+  margin-top: 14px;
 }
 
-.compare-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  color: #6f89a8;
+.form-item {
+  margin-top: 12px;
 }
 
-.compare-row strong {
-  color: #1d466f;
-  font-size: 13px;
-}
-
-.compare-row + .compare-row {
-  margin-top: 10px;
-}
-
-.action-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.block-btn {
+.form-item textarea {
   width: 100%;
+  border: 1px solid #d8e5f2;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  outline: none;
+  resize: vertical;
 }
 
-@media (max-width: 1320px) {
-  .diagnosis-grid {
-    grid-template-columns: 1fr;
-  }
+.action-column {
+  margin-top: 16px;
+  flex-direction: column;
+}
 
-  .page-header {
+@media (max-width: 1360px) {
+  .page-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .content-grid,
+  .compare-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
