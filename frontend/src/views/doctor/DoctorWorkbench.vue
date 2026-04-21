@@ -8,17 +8,6 @@
           <div class="hero-meta">门诊诊疗 · 影像复核 · 转诊协同</div>
         </div>
 
-        <div class="hero-actions">
-          <button class="hero-action-btn primary" @click="goToDiagnosis">
-            进入影像诊断
-          </button>
-          <button class="hero-action-btn" @click="goToRecords">
-            查看我的病例
-          </button>
-          <button class="hero-action-btn" @click="goToReferral">
-            发起分级诊疗
-          </button>
-        </div>
       </div>
 
       <div v-if="loading" class="page-tip">正在加载工作台数据...</div>

@@ -111,13 +111,13 @@
             </div>
           </div>
 
-          <div class="project-quick-row">
-            <button type="button" class="text-link" @click="goToCloud">进入影像云</button>
-            <span class="quick-sep">·</span>
-            <button type="button" class="text-link" @click="goToLab">进入项目空间</button>
-            <span class="quick-sep">·</span>
-            <button type="button" class="text-link" @click="scrollToTasks">查看任务分配</button>
-          </div>
+<!--          <div class="project-quick-row">-->
+<!--            <button type="button" class="text-link" @click="goToCloud">进入影像云</button>-->
+<!--            <span class="quick-sep">·</span>-->
+<!--            <button type="button" class="text-link" @click="goToLab">进入项目空间</button>-->
+<!--            <span class="quick-sep">·</span>-->
+<!--            <button type="button" class="text-link" @click="scrollToTasks">查看任务分配</button>-->
+<!--          </div>-->
         </template>
 
         <div v-else class="empty-text">请选择左侧项目查看详情</div>

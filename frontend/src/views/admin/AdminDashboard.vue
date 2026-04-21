@@ -69,19 +69,19 @@
           </div>
         </div>
 
-        <div class="panel-card">
-          <div class="panel-head">
-            <span>职责边界</span>
-            <span class="panel-link">角色划分</span>
-          </div>
+<!--        <div class="panel-card">-->
+<!--          <div class="panel-head">-->
+<!--            <span>职责边界</span>-->
+<!--            <span class="panel-link">角色划分</span>-->
+<!--          </div>-->
 
-          <div class="scope-list">
-            <div v-for="item in overview.boundaries" :key="item.title" class="scope-item">
-              <div class="scope-title">{{ item.title }}</div>
-              <div class="scope-desc">{{ item.desc }}</div>
-            </div>
-          </div>
-        </div>
+<!--          <div class="scope-list">-->
+<!--            <div v-for="item in overview.boundaries" :key="item.title" class="scope-item">-->
+<!--              <div class="scope-title">{{ item.title }}</div>-->
+<!--              <div class="scope-desc">{{ item.desc }}</div>-->
+<!--            </div>-->
+<!--          </div>-->
+<!--        </div>-->
       </section>
 
       <section class="panel-card">

@@ -10,9 +10,9 @@
         <button class="ghost-btn" @click="goToRecords" :disabled="!selected">
           查看病例
         </button>
-        <button class="primary-btn" @click="handleCreate" :disabled="submitting">
-          {{ submitting ? '提交中...' : '提交申请' }}
-        </button>
+<!--        <button class="primary-btn" @click="handleCreate" :disabled="submitting">-->
+<!--          {{ submitting ? '提交中...' : '提交申请' }}-->
+<!--        </button>-->
       </div>
     </div>
 

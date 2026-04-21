@@ -7,12 +7,12 @@
       </div>
 
       <div class="head-actions">
-        <button class="ghost-btn" @click="showUploadModal = true" :disabled="!selectedCase">
-          补充随访照片
-        </button>
-        <button class="primary-btn" @click="goToDiagnosis" :disabled="!selectedCase">
-          进入影像诊断
-        </button>
+<!--        <button class="ghost-btn" @click="showUploadModal = true" :disabled="!selectedCase">-->
+<!--          补充随访照片-->
+<!--        </button>-->
+<!--        <button class="primary-btn" @click="goToDiagnosis" :disabled="!selectedCase">-->
+<!--          进入影像诊断-->
+<!--        </button>-->
       </div>
     </div>
 

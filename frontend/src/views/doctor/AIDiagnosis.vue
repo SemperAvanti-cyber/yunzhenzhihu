@@ -10,9 +10,6 @@
         <button class="ghost-btn" @click="handleExport" :disabled="!pageData.caseInfo.caseId">
           导出辅助报告
         </button>
-        <button class="primary-btn" @click="handleSubmitReview" :disabled="submitting || !pageData.caseInfo.caseId">
-          {{ submitting ? '提交中...' : '提交复核意见' }}
-        </button>
       </div>
     </div>
 
@@ -203,7 +200,7 @@
         </div>
 
         <div class="doctor-box">
-          <div class="doctor-box-title">医生修正后</div>
+          <div class="doctor-box-title">医生修正区</div>
 
           <div class="form-item">
             <label>当前判断</label>
@@ -226,8 +223,11 @@
             确认辅助结论
           </button>
           <button class="ghost-btn full" @click="handleRevise" :disabled="submitting">
-            修正判断
+            提交复核意见
           </button>
+<!--          <button class="primary-btn" @click="handleSubmitReview" :disabled="submitting || !pageData.caseInfo.caseId">-->
+<!--            {{ submitting ? '提交中...' : '提交复核意见' }}-->
+<!--          </button>-->
           <button
               class="warn-btn full"
               @click="goToReferral"
@@ -377,7 +377,7 @@ async function handleRevise() {
       treatmentPlan: doctorForm.treatmentPlan,
       suggestion: doctorForm.suggestion
     })
-    window.alert('医生修正判断已保存')
+    window.alert('复核意见已提交')
     await fetchWorkspace()
   } catch (err) {
     window.alert(err.message || '提交失败')
